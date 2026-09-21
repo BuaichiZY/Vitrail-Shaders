@@ -22,16 +22,16 @@ import dev.vitrail.uniform.ClipSpace;
 import dev.vitrail.uniform.WorldState;
 import dev.vitrail.Vitrail;
 
-import com.mojang.blaze3d.GpuDeviceLossException;
-import com.mojang.blaze3d.buffers.GpuBuffer;
-import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import com.mojang.renderpearl.api.device.GpuDeviceLossException;
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.buffers.Std140Builder;
-import com.mojang.blaze3d.pipeline.CompiledRenderPipeline;
+import com.mojang.renderpearl.api.pipeline.CompiledRenderPipeline;
 import com.mojang.blaze3d.pipeline.RenderTarget;
-import com.mojang.blaze3d.systems.CommandEncoder;
-import com.mojang.blaze3d.systems.GpuDevice;
+import com.mojang.renderpearl.api.commands.CommandEncoder;
+import com.mojang.renderpearl.api.device.GpuDevice;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.GpuTextureView;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MappableRingBuffer;
 import net.minecraft.network.chat.Component;
@@ -378,7 +378,7 @@ public final class PackChain {
 	 * Whether {@link #openFeatures()} really posed the game's overrides, which is the one thing
 	 * {@link #closeFeatures()} may take back down and compose on.
 	 * <p>
-	 * Held here rather than read back off {@code RenderSystem.outputColorTextureOverride}. That field
+	 * Held here rather than read back off {@code ScenePass.colorOverride}. That field
 	 * is the game's own and the game sets it for its own always-on-top features, and
 	 * {@link #openFeatures()} has a reason of its own to refuse, so the two questions are not one.
 	 * Read off the game's, a refused frame composes a layer nothing drew into, the frame before's,
@@ -490,7 +490,9 @@ public final class PackChain {
 				Set.copyOf(chain.targets().passing()));
 		// Before the first frame allocates a target: the usage a compute needs is baked into the
 		// image at creation, and nothing can add it afterwards.
-		this.targets.storageTargets(this.compute.storageTargets());
+		Set<Integer> storageTargets = new java.util.HashSet<>(this.compute.storageTargets());
+		storageTargets.addAll(chain.targets().storageTargets());
+		this.targets.storageTargets(storageTargets);
 	}
 
 	/**
@@ -1263,6 +1265,7 @@ public final class PackChain {
 		}
 
 		FamilyWarmup.awaitAll();
+		PackPipelines.close();
 
 		// The far terrain's two corner rings, the one-texel constants and the comparison sampler
 		// survive every release on purpose, so the shutdown is the one caller that really frees
@@ -1385,7 +1388,7 @@ public final class PackChain {
 
 		openTargets(device);
 
-		return new Ready(main, mainView, main.useDepth ? main.getDepthTextureView() : null, seeding);
+		return new Ready(main, mainView, main.getDepthTextureView(), seeding);
 	}
 
 	/**
@@ -1959,16 +1962,16 @@ public final class PackChain {
 				return;
 			}
 
-			RenderSystem.outputColorTextureOverride = layer;
-			RenderSystem.outputDepthTextureOverride = main.getDepthTextureView();
+			ScenePass.colorOverride = layer;
+			ScenePass.depthOverride = main.getDepthTextureView();
 			chain.redirected = true;
 		} catch (GpuDeviceLossException e) {
 			throw e;
 		} catch (RuntimeException e) {
 			// The overrides are cleared on the way out rather than left half set: one standing past
 			// this point swallows every later feature draw of the frame.
-			RenderSystem.outputColorTextureOverride = null;
-			RenderSystem.outputDepthTextureOverride = null;
+			ScenePass.colorOverride = null;
+			ScenePass.depthOverride = null;
 			chain.redirected = false;
 			stop();
 			Vitrail.logger().error("Vitrail stopped drawing this pack after an error", e);
@@ -2054,8 +2057,8 @@ public final class PackChain {
 	public static void closeFeatures() {
 		// Always put back, whatever else happens below: overrides left standing past this point
 		// would swallow every later feature draw of the frame.
-		RenderSystem.outputColorTextureOverride = null;
-		RenderSystem.outputDepthTextureOverride = null;
+		ScenePass.colorOverride = null;
+		ScenePass.depthOverride = null;
 
 		PackChain chain = active;
 		if (chain == null || !chain.redirected) {
@@ -2894,7 +2897,7 @@ public final class PackChain {
 	 * engine that has just decided to draw nothing.
 	 */
 	private boolean valid(CompiledRenderPipeline compiled, PackPass pass) {
-		if (compiled.isValid()) {
+		if (PackPipelines.valid(compiled)) {
 			return true;
 		}
 
@@ -3244,6 +3247,7 @@ public final class PackChain {
 	}
 
 	void release() {
+		PackPipelines.releaseLoad(this.load);
 		// The worker's flag first, so a compile still running for this chain stores nothing more
 		// into programs nothing will ever draw again; what it already stored is destroyed with the
 		// walk below, which is safe for objects nothing ever bound. Only families the worker

@@ -4,15 +4,15 @@ import dev.vitrail.pack.target.PackDirectives;
 import dev.vitrail.pack.target.TargetDirectives;
 import dev.vitrail.Vitrail;
 
-import com.mojang.blaze3d.GpuDeviceLossException;
-import com.mojang.blaze3d.GpuFormat;
-import com.mojang.blaze3d.systems.CommandEncoder;
-import com.mojang.blaze3d.systems.RenderPass;
-import com.mojang.blaze3d.systems.RenderPassDescriptor;
+import com.mojang.renderpearl.api.device.GpuDeviceLossException;
+import com.mojang.renderpearl.api.GpuFormat;
+import com.mojang.renderpearl.api.commands.CommandEncoder;
+import com.mojang.renderpearl.api.commands.RenderPass;
+import com.mojang.renderpearl.api.commands.RenderPassDescriptor;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.FilterMode;
-import com.mojang.blaze3d.textures.GpuTexture;
-import com.mojang.blaze3d.textures.GpuTextureView;
+import com.mojang.renderpearl.api.textures.FilterMode;
+import com.mojang.renderpearl.api.textures.GpuTexture;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
 import net.minecraft.util.Mth;
 import org.joml.Vector4f;
 import org.joml.Vector4fc;
@@ -516,7 +516,7 @@ final class ShadowTargets {
 			return;
 		}
 
-		RenderPassDescriptor descriptor = RenderPassDescriptor.create(() -> CLEAR_LABEL);
+		RenderPassDescriptor.Builder descriptor = RenderPassDescriptor.builder(() -> CLEAR_LABEL);
 		for (int index = 0; index < colours.size(); index++) {
 			descriptor.withColorAttachment(colours.get(index), Optional.of(colourValues.get(index)));
 		}
@@ -526,7 +526,7 @@ final class ShadowTargets {
 		}
 
 		descriptor.withRenderArea(new RenderPass.RenderArea(0, 0, this.resolution, this.resolution));
-		encoder.createRenderPass(descriptor).close();
+		encoder.createRenderPass(descriptor.build()).close();
 	}
 
 	private void stash() {

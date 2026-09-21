@@ -3,8 +3,10 @@ package dev.vitrail.mixin;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Local;
-import com.mojang.blaze3d.vulkan.VulkanBindGroupLayout;
-import com.mojang.blaze3d.vulkan.VulkanBindGroupLayout.Entry;
+import com.mojang.renderpearl.backend.vulkan.VulkanRenderPipeline;
+import com.mojang.renderpearl.backend.api.BackendRenderPipeline;
+import dev.vitrail.render.PackSpvModule;
+import com.mojang.renderpearl.api.pipeline.BindGroupLayout.UniformDescription;
 import dev.vitrail.pack.texture.CustomImages;
 import dev.vitrail.render.GeometryStage;
 import dev.vitrail.render.WideSamplerSets;
@@ -32,32 +34,33 @@ import java.util.List;
  * <p>
  * And takes the push flag off the layout MoltenVK could not push, for {@link WideSamplerSets}.
  */
-@Mixin(VulkanBindGroupLayout.class)
+@Mixin(VulkanRenderPipeline.class)
 public abstract class VulkanBindGroupLayoutMixin {
 
 	@Unique
-	private static final ThreadLocal<Entry> CURRENT = new ThreadLocal<>();
+	private static final ThreadLocal<UniformDescription> CURRENT = new ThreadLocal<>();
 
-	@WrapOperation(method = "create", require = 1,
+	@WrapOperation(method = "compile", require = 1,
 			at = @At(value = "INVOKE", target = "Ljava/util/List;get(I)Ljava/lang/Object;"))
 	private static Object vitrail$entry(List<?> entries, int index, Operation<Object> original) {
 		Object entry = original.call(entries, index);
-		if (entry instanceof Entry named) {
+		if (entry instanceof UniformDescription named) {
 			CURRENT.set(named);
 		}
 
 		return entry;
 	}
 
-	@WrapOperation(method = "create", require = 1,
+	@WrapOperation(method = "compile", require = 1,
 			at = @At(value = "INVOKE",
 					target = "Lorg/lwjgl/vulkan/VkDescriptorSetLayoutBinding;descriptorType(I)"
 							+ "Lorg/lwjgl/vulkan/VkDescriptorSetLayoutBinding;"))
 	private static VkDescriptorSetLayoutBinding vitrail$storageType(
 			VkDescriptorSetLayoutBinding binding, int type, Operation<VkDescriptorSetLayoutBinding> original) {
-		Entry entry = CURRENT.get();
+		UniformDescription entry = CURRENT.get();
 		if (type == 1 && entry != null && (StorageImages.storageBinding(entry.name())
-				|| CustomImages.storage(entry.name()))) {
+				|| CustomImages.storage(entry.name())
+				|| dev.vitrail.pack.model.TargetName.imageIndex(entry.name()).isPresent())) {
 			type = 3;
 		}
 
@@ -80,15 +83,16 @@ public abstract class VulkanBindGroupLayoutMixin {
 	 * is still a flag nobody asked for. The question is asked of the thread, which is where the
 	 * stage in flight is held, and this call is the last of the compile that put it there.
 	 */
-	@WrapOperation(method = "create", require = 1,
+	@WrapOperation(method = "compile", require = 1,
 			at = @At(value = "INVOKE",
 					target = "Lorg/lwjgl/vulkan/VkDescriptorSetLayoutBinding;stageFlags(I)"
 							+ "Lorg/lwjgl/vulkan/VkDescriptorSetLayoutBinding;"))
 	private static VkDescriptorSetLayoutBinding vitrail$geometryStage(
 			VkDescriptorSetLayoutBinding binding, int flags,
-			Operation<VkDescriptorSetLayoutBinding> original) {
-		return original.call(binding,
-				GeometryStage.buildingHere() ? flags | GeometryStage.STAGE_BIT : flags);
+			Operation<VkDescriptorSetLayoutBinding> original,
+			@Local(argsOnly = true) BackendRenderPipeline.CreateInfo info) {
+		boolean geometry = info.shaders().stream().anyMatch(shader -> shader.module() instanceof PackSpvModule pack && pack.isGeometry());
+		return original.call(binding, geometry ? flags | GeometryStage.STAGE_BIT : flags);
 	}
 
 	/**
@@ -98,15 +102,15 @@ public abstract class VulkanBindGroupLayoutMixin {
 	 * At the driver call rather than at the flag the game writes, because both rewrites above have
 	 * run by then: the count is taken over the types and the stages the layout really carries.
 	 */
-	@WrapOperation(method = "create", require = 1,
+	@WrapOperation(method = "compile", require = 1,
 			at = @At(value = "INVOKE",
 					target = "Lorg/lwjgl/vulkan/VK12;vkCreateDescriptorSetLayout("
 							+ "Lorg/lwjgl/vulkan/VkDevice;Lorg/lwjgl/vulkan/VkDescriptorSetLayoutCreateInfo;"
 							+ "Lorg/lwjgl/vulkan/VkAllocationCallbacks;Ljava/nio/LongBuffer;)I"))
 	private static int vitrail$allocatedSets(VkDevice device, VkDescriptorSetLayoutCreateInfo info,
 			VkAllocationCallbacks allocator, LongBuffer handle, Operation<Integer> original,
-			@Local(argsOnly = true) String name) {
-		boolean allocated = WideSamplerSets.dropPush(info, name);
+			@Local(argsOnly = true) BackendRenderPipeline.CreateInfo pipeline) {
+		boolean allocated = WideSamplerSets.dropPush(info, pipeline.name());
 		int result = original.call(device, info, allocator, handle);
 		if (result == VK12.VK_SUCCESS) {
 			WideSamplerSets.created(handle.get(0), allocated);

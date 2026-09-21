@@ -2,7 +2,7 @@ package dev.vitrail.render;
 
 import dev.vitrail.Vitrail;
 
-import com.mojang.blaze3d.GpuDeviceLossException;
+import com.mojang.renderpearl.api.device.GpuDeviceLossException;
 import com.mojang.blaze3d.ProjectionType;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -448,9 +448,15 @@ public final class HandDraw {
 			// either of them to carry, and a draw this engine hands back to the game lands in the
 			// same pixels as one it serves.
 			modelViewStack.identity();
-			gameRenderer.itemInHandRenderer.submitHandsWithItems(partial, new PoseStack(),
-					this.submits, player, light);
-			this.dispatcher.renderAllFeatures(this.submits);
+			var playerState = state.levelRenderState.playerRenderState;
+			if (playerState.firstPersonHandsAndItems != null) {
+				gameRenderer.firstPersonHandsAndItemsRenderer.submitHandsWithItems(partial, new PoseStack(),
+						this.submits, playerState, playerState.firstPersonHandsAndItems);
+			}
+			try (var frame = this.dispatcher.prepareFrame(this.submits);
+					var pass = ScenePass.features()) {
+				FeatureRenderDispatcher.renderAllFeatures(pass, frame);
+			}
 		} finally {
 			half = null;
 			modelViewStack.popMatrix();

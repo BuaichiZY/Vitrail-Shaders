@@ -8,10 +8,9 @@ import dev.vitrail.pack.source.OpenedPack;
 import dev.vitrail.render.timing.PassTimings;
 import dev.vitrail.Vitrail;
 
-import com.mojang.blaze3d.systems.GpuDevice;
+import com.mojang.renderpearl.api.device.GpuDevice;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.vulkan.glsl.GlslCompiler;
-import com.mojang.blaze3d.vulkan.VulkanDevice;
+import com.mojang.renderpearl.backend.vulkan.VulkanDevice;
 import net.minecraft.util.Util;
 
 import java.nio.file.Path;
@@ -188,7 +187,7 @@ final class FamilyWarmup {
 			whole = CompletableFuture.supplyAsync(() -> {
 				start.set(System.nanoTime());
 				Vitrail.logger().info("The pack-load worker starts on the six families");
-				VulkanDevice device = compileDevice(keepOld);
+				GpuDevice device = compileDevice(keepOld);
 				fanned.set(device != null);
 
 				List<CompletableFuture<Void>> compiles = new ArrayList<>(this.families.size());
@@ -284,11 +283,11 @@ final class FamilyWarmup {
 	 * task is spawned then, and every family keeps its first-draw path. Resolved on the worker
 	 * rather than at the call, because the load's own road can run before rendering is up.
 	 */
-	private static VulkanDevice compileDevice(boolean keepOld) {
+	private static GpuDevice compileDevice(boolean keepOld) {
 		GpuDevice front = RenderSystem.tryGetDevice();
 		if (front != null && !keepOld
-				&& ((GpuDeviceAccessor) front).vitrail$backend() instanceof VulkanDevice device) {
-			return device;
+				&& ((GpuDeviceAccessor) front).vitrail$backend() instanceof VulkanDevice) {
+			return front;
 		}
 
 		Vitrail.logger().info("The workers leave the leftover families to their first draw: {}",
@@ -306,7 +305,7 @@ final class FamilyWarmup {
 	 * translation stage.
 	 */
 	private void spawnFamilyCompiles(List<CompletableFuture<Void>> compiles, int family,
-			VulkanDevice device) {
+			GpuDevice device) {
 		if (device == null) {
 			return;
 		}
@@ -337,15 +336,15 @@ final class FamilyWarmup {
 	 * {@code vitrail/keep-first-draw-compiles} beside the pack keeps the old first-draw path for
 	 * a measurement, the way {@code keep-redone-work} does.
 	 */
-	private void warmFamily(List<DumpedProgram> programs, VulkanDevice device) {
-		try (GlslCompiler compiler = new GlslCompiler()) {
+	private void warmFamily(List<DumpedProgram> programs, GpuDevice device) {
+		{
 			for (DumpedProgram program : programs) {
 				if (this.released || PackChain.stopped()) {
 					return;
 				}
 
 				this.warmWalked.incrementAndGet();
-				if (program.warmAhead(device, compiler)) {
+				if (program.warmAhead(device)) {
 					this.warmServed.incrementAndGet();
 				}
 			}

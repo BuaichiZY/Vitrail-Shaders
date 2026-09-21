@@ -7,9 +7,9 @@ import dev.vitrail.render.EntityDraw;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import com.mojang.blaze3d.PrimitiveTopology;
+import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
 import com.mojang.blaze3d.vertex.VertexConsumer;
-import com.mojang.blaze3d.vertex.VertexFormat;
+import com.mojang.renderpearl.api.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.VertexSorting;
 import net.minecraft.client.renderer.StagedVertexBuffer;
 import net.minecraft.client.renderer.rendertype.RenderType;
@@ -91,8 +91,8 @@ public abstract class RenderTypeFeatureRendererGroupMixin {
 
 	@WrapOperation(method = "getOrAddDraw", require = 1,
 			at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/StagedVertexBuffer;"
-					+ "appendDraw(Lcom/mojang/blaze3d/vertex/VertexFormat;"
-					+ "Lcom/mojang/blaze3d/PrimitiveTopology;"
+					+ "appendDraw(Lcom/mojang/renderpearl/api/vertex/VertexFormat;"
+					+ "Lcom/mojang/renderpearl/api/pipeline/PrimitiveTopology;"
 					+ "Lcom/mojang/blaze3d/vertex/VertexSorting;)"
 					+ "Lnet/minecraft/client/renderer/StagedVertexBuffer$Draw;"))
 	private StagedVertexBuffer.Draw vitrail$mark(StagedVertexBuffer buffer, VertexFormat format,

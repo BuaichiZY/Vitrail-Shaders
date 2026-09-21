@@ -25,7 +25,7 @@ public final class EngineDefines {
 	 * Kept as OptiFine's packed form, major times 10000 plus minor times 100 plus patch. It is
 	 * a Minecraft version rather than ours, because that is what packs compare against.
 	 */
-	public static final int DEFAULT_MC_VERSION = 260200;
+	public static final int DEFAULT_MC_VERSION = 260300;
 
 	/**
 	 * The Iris release whose behaviour this engine mirrors, 1.11.2 on the 26.1 branch, in the

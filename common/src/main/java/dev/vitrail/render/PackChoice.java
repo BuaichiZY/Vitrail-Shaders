@@ -23,7 +23,7 @@ import dev.vitrail.settings.PackSession;
 import dev.vitrail.settings.SettingsFile;
 import dev.vitrail.settings.SettingsLayers;
 import dev.vitrail.Vitrail;
-import com.mojang.blaze3d.GpuDeviceLossException;
+import com.mojang.renderpearl.api.device.GpuDeviceLossException;
 import net.minecraft.client.GraphicsPreset;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Options;

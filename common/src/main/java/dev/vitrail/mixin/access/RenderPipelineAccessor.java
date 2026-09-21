@@ -1,7 +1,7 @@
 package dev.vitrail.mixin.access;
 
-import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.vertex.VertexFormat;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.vertex.VertexFormat;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
 
@@ -22,5 +22,5 @@ import org.jspecify.annotations.Nullable;
 public interface RenderPipelineAccessor {
 
 	@Accessor("vertexFormatPerBuffer")
-	@Nullable VertexFormat[] vitrail$declaredFormats();
+	java.util.List<@Nullable VertexFormat> vitrail$declaredFormats();
 }

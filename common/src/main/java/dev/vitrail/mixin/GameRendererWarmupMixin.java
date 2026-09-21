@@ -27,8 +27,8 @@ public abstract class GameRendererWarmupMixin {
 	@WrapOperation(method = "render", require = 1,
 			at = @At(value = "INVOKE",
 					target = "Lnet/minecraft/client/renderer/GameRenderer;renderLevel("
-							+ "Lnet/minecraft/client/DeltaTracker;)V"))
-	private void vitrail$skipLevelWhilePackWarms(GameRenderer renderer, DeltaTracker delta,
+							+ ")V"))
+	private void vitrail$skipLevelWhilePackWarms(GameRenderer renderer,
 			Operation<Void> original) {
 		// Before the branch and not inside one of its arms: the question is owed whether the pack
 		// is compiling or drawing, and this is the one line both roads pass through. A frame that
@@ -39,6 +39,6 @@ public abstract class GameRendererWarmupMixin {
 			return;
 		}
 
-		original.call(renderer, delta);
+		original.call(renderer);
 	}
 }

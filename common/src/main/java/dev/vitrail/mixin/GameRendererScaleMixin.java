@@ -5,8 +5,8 @@ import dev.vitrail.render.RenderScale;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.mojang.blaze3d.pipeline.RenderTarget;
-import com.mojang.blaze3d.systems.CommandEncoder;
-import com.mojang.blaze3d.textures.GpuTexture;
+import com.mojang.renderpearl.api.commands.CommandEncoder;
+import com.mojang.renderpearl.api.textures.GpuTexture;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GameRenderer;
@@ -52,19 +52,17 @@ public abstract class GameRendererScaleMixin {
 	 * swap on any other frame would scale a loading screen.
 	 */
 	@Inject(method = "render", at = @At("HEAD"))
-	private void vitrail$frameIntent(DeltaTracker deltaTracker, boolean advanceGameTime,
-			CallbackInfo ci) {
+	private void vitrail$frameIntent(CallbackInfo ci) {
 		RenderScale.recover(mainRenderTarget());
 
 		Minecraft minecraft = Minecraft.getInstance();
-		RenderScale.frameIntent(minecraft.isGameLoadFinished() && advanceGameTime
-				&& minecraft.level != null);
+		RenderScale.frameIntent(minecraft.gameRenderer.gameRenderState().shouldRenderLevel);
 	}
 
 	@WrapOperation(method = "render", at = @At(value = "INVOKE",
-			target = "Lcom/mojang/blaze3d/systems/CommandEncoder;clearColorAndDepthTextures("
-					+ "Lcom/mojang/blaze3d/textures/GpuTexture;Lorg/joml/Vector4fc;"
-					+ "Lcom/mojang/blaze3d/textures/GpuTexture;D)V"))
+			target = "Lcom/mojang/renderpearl/api/commands/CommandEncoder;clearColorAndDepthTextures("
+					+ "Lcom/mojang/renderpearl/api/textures/GpuTexture;Lorg/joml/Vector4fc;"
+					+ "Lcom/mojang/renderpearl/api/textures/GpuTexture;D)V"))
 	private void vitrail$scaleWorld(CommandEncoder encoder, GpuTexture colour, Vector4fc clearColour,
 			GpuTexture depth, double clearDepth, Operation<Void> original) {
 		RenderTarget main = mainRenderTarget();
@@ -77,8 +75,8 @@ public abstract class GameRendererScaleMixin {
 	}
 
 	@WrapOperation(method = "render", at = @At(value = "INVOKE",
-			target = "Lcom/mojang/blaze3d/systems/CommandEncoder;clearDepthTexture("
-					+ "Lcom/mojang/blaze3d/textures/GpuTexture;D)V"))
+			target = "Lcom/mojang/renderpearl/api/commands/CommandEncoder;clearDepthTexture("
+					+ "Lcom/mojang/renderpearl/api/textures/GpuTexture;D)V"))
 	private void vitrail$unscaleWorld(CommandEncoder encoder, GpuTexture depth, double clearDepth,
 			Operation<Void> original) {
 		RenderTarget main = mainRenderTarget();

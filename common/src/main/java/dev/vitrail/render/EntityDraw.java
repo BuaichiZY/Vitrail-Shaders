@@ -16,19 +16,19 @@ import dev.vitrail.pack.target.TargetPlan;
 import dev.vitrail.pack.model.TargetSize;
 import dev.vitrail.Vitrail;
 
-import com.mojang.blaze3d.GpuDeviceLossException;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.device.GpuDeviceLossException;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
 import com.mojang.blaze3d.pipeline.RenderTarget;
-import com.mojang.blaze3d.systems.CommandEncoder;
-import com.mojang.blaze3d.systems.GpuDevice;
-import com.mojang.blaze3d.systems.RenderPass;
-import com.mojang.blaze3d.systems.RenderPassDescriptor;
+import com.mojang.renderpearl.api.commands.CommandEncoder;
+import com.mojang.renderpearl.api.device.GpuDevice;
+import com.mojang.renderpearl.api.commands.RenderPass;
+import com.mojang.renderpearl.api.commands.RenderPassDescriptor;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.systems.ScissorState;
-import com.mojang.blaze3d.textures.GpuTextureView;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
-import com.mojang.blaze3d.vertex.VertexFormat;
-import com.mojang.blaze3d.vertex.VertexFormatElement;
+import com.mojang.renderpearl.api.vertex.VertexFormat;
+import com.mojang.renderpearl.api.vertex.VertexFormatElement;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.StagedVertexBuffer;
@@ -553,7 +553,7 @@ public final class EntityDraw extends FamilyDraw {
 		 * drifted would put a piece in the window where nothing is drawing it.
 		 */
 		boolean blended() {
-			return this.pipeline.getColorTargetState().blendFunction().isPresent();
+			return this.pipeline.getColorTargetStates().getFirst().blendFunction().isPresent();
 		}
 
 		/**
@@ -685,9 +685,7 @@ public final class EntityDraw extends FamilyDraw {
 			RenderPipelines.TEXT_GRAYSCALE_POLYGON_OFFSET,
 			DefaultVertexFormat.POSITION_TEX_LIGHTMAP_COLOR,
 			RenderPipelines.TEXT_SEE_THROUGH, DefaultVertexFormat.POSITION_TEX_COLOR,
-			RenderPipelines.TEXT_GRAYSCALE_SEE_THROUGH, DefaultVertexFormat.POSITION_TEX_COLOR,
-			RenderPipelines.TEXT_BACKGROUND, DefaultVertexFormat.POSITION_COLOR_LIGHTMAP,
-			RenderPipelines.TEXT_BACKGROUND_SEE_THROUGH, DefaultVertexFormat.POSITION_COLOR);
+			RenderPipelines.TEXT_GRAYSCALE_SEE_THROUGH, DefaultVertexFormat.POSITION_TEX_COLOR);
 
 	/**
 	 * The three of those eight whose font sheet holds ONE channel, and which the game therefore
@@ -752,9 +750,7 @@ public final class EntityDraw extends FamilyDraw {
 	private static final Set<RenderPipeline> PINNED = Set.of(
 			RenderPipelines.END_CRYSTAL_BEAM,
 			RenderPipelines.ENTITY_CUTOUT_Z_OFFSET,
-			RenderPipelines.ENERGY_SWIRL,
-			RenderPipelines.TEXT_BACKGROUND,
-			RenderPipelines.TEXT_BACKGROUND_SEE_THROUGH);
+			RenderPipelines.ENERGY_SWIRL);
 
 	/**
 	 * Every pipeline whose draws walk the entity program names, in the two runs the game sorts its
@@ -850,8 +846,6 @@ public final class EntityDraw extends FamilyDraw {
 				CUTOUT));
 		put(new Element(RenderPipelines.ENTITY_TRANSLUCENT_CULL, "translucent_cull",
 				ENTITIES_TRANSLUCENT, CUTOUT));
-		put(new Element(RenderPipelines.ARMOR_TRANSLUCENT, "armor_translucent", ENTITIES_TRANSLUCENT,
-				CUTOUT));
 		put(new Element(RenderPipelines.ITEM_TRANSLUCENT, "item_translucent", ENTITIES_TRANSLUCENT,
 				CUTOUT));
 		put(new Element(RenderPipelines.BANNER_PATTERN, "banner", ENTITIES_TRANSLUCENT, CUTOUT));
@@ -899,10 +893,6 @@ public final class EntityDraw extends FamilyDraw {
 		// getText. Not a name plate's box, which is an effect over the font's white glyph and comes
 		// in on the six above with the letters it sits behind; the two render types below have one
 		// caller in the client and it is DisplayRenderer.TextDisplayRenderer.
-		put(new Element(RenderPipelines.TEXT_BACKGROUND, "text_background", ENTITIES_TRANSLUCENT,
-				CUTOUT));
-		put(new Element(RenderPipelines.TEXT_BACKGROUND_SEE_THROUGH, "text_background_see_through",
-				ENTITIES_TRANSLUCENT, CUTOUT));
 	}
 
 	/**
@@ -1640,38 +1630,9 @@ public final class EntityDraw extends FamilyDraw {
 		return element.afterStage() ? translucentFeatures : opaqueFeatures;
 	}
 
-	/**
-	 * Whether this draw really lands on the game's main target, asked of what its output target
-	 * RESOLVES to rather than of which target object it names.
-	 * <p>
-	 * <strong>The difference is not pedantry and it cost this family two rows.</strong> Two of the
-	 * four output targets exist only while the game's improved transparency is on, and
-	 * {@code OutputTarget.getRenderTarget} resolves an absent one to the main target
-	 * ({@code rendertype/OutputTarget.java:24-27}); the render type keeps naming it either way. Read
-	 * by identity, {@code ITEM_TRANSLUCENT} and {@code ENTITY_TRANSLUCENT_CULL} were refused on every
-	 * machine that has improved transparency off, which is the default, although the game was drawing
-	 * them onto the very target this engine had open. What that left to the game's own shader is not
-	 * a corner: every experience orb ({@code entity/ExperienceOrbRenderer.java:21}), every translucent
-	 * item sheet ({@code Sheets.java:39,41}) and the translucent type of every living entity
-	 * ({@code entity/LivingEntityRenderer.java:130}).
-	 * <p>
-	 * Iris keys on neither, because it never meets the question: it turns improved transparency off
-	 * as soon as shaders are enabled ({@code mixin/fabulous/MixinDisableFabulousGraphics.java:37-40})
-	 * and then serves both pipelines through {@code getTranslucent}
-	 * ({@code pipeline/IrisPipelines.java:35,36}).
-	 * <p>
-	 * <strong>The question is shared with the opaque half and the answer moves nothing there</strong>,
-	 * which was measured rather than assumed: of the nine render types of 26.2 that name a target
-	 * other than the main one ({@code rendertype/RenderTypes.java:25,141,167,260,324,345,352,359,397}),
-	 * none is built on a pipeline of the opaque table, so every opaque row named the main target
-	 * before and resolves to it now.
-	 */
-	@SuppressWarnings("ReferenceEquality")
+	/** Tests the actual shared pass instead of the removed render-type output target. */
 	private static boolean onMainTarget(PreparedRenderType prepared) {
-		Minecraft minecraft = Minecraft.getInstance();
-		RenderTarget main = minecraft == null ? null : minecraft.gameRenderer.mainRenderTarget();
-
-		return main != null && prepared.outputTarget().getRenderTarget() == main;
+		return ScenePass.onMainTarget();
 	}
 
 	/** What closing either window costs, which is the same two things. */
@@ -1801,8 +1762,8 @@ public final class EntityDraw extends FamilyDraw {
 			// speak for both and the log would never say the glint went back too. Keying on the piece
 			// instead would say it once per row, which is six lines for the one thing that happened.
 			return draw.refuse(element, "elsewhere:" + (element.glint() ? "glint" : "entity") + ":"
-					+ prepared.outputTarget(), true, "the game sends it to "
-					+ prepared.outputTarget() + ", which it composes itself afterwards, and the pack's "
+					+ "a non-main render pass", true, "the game sends it to "
+					+ "a non-main render pass" + ", which it composes itself afterwards, and the pack's "
 					+ "colour targets cannot be attached beside a picture this engine has not got. It "
 					+ "is the game's improved transparency that allocates those targets, and this "
 					+ "engine turns that option off when the pack is loaded, as Iris does when shaders "
@@ -1922,7 +1883,7 @@ public final class EntityDraw extends FamilyDraw {
 						: texture.textureView(),
 				texture == null ? null : texture.sampler());
 
-		this.open.setPipeline(this.bound);
+		this.open.setPipeline(PackPipelines.get(this.bound));
 		scissor(prepared.scissorState());
 		program.bind(this.open);
 
@@ -2007,14 +1968,8 @@ public final class EntityDraw extends FamilyDraw {
 		// The two images the game would have drawn into, worked out as PreparedRenderType works them
 		// out: the overrides are the game's own way of sending a phase somewhere else, and the layer
 		// that carries its translucent features is one of them.
-		RenderTarget target = prepared.outputTarget().getRenderTarget();
-		GpuTextureView colour = RenderSystem.outputColorTextureOverride != null
-				? RenderSystem.outputColorTextureOverride
-				: target.getColorTextureView();
-		GpuTextureView depth = !target.useDepth ? null
-				: RenderSystem.outputDepthTextureOverride != null
-						? RenderSystem.outputDepthTextureOverride
-						: target.getDepthTextureView();
+		GpuTextureView colour = ScenePass.color();
+		GpuTextureView depth = ScenePass.depth();
 
 		RenderPassDescriptor descriptor = program.descriptor(colour, depth);
 		if (descriptor == null && element.shadow()) {

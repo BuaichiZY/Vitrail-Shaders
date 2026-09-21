@@ -7,7 +7,6 @@ import net.minecraft.world.attribute.EnvironmentAttributeMap;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.BiomeGenerationSettings;
 import net.minecraft.world.level.biome.BiomeSpecialEffects;
-import net.minecraft.world.level.biome.MobSpawnSettings;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -49,8 +48,7 @@ public abstract class BiomeMixin implements BiomeHumidity {
 
 	@Inject(method = "<init>", at = @At("RETURN"), require = 1)
 	private void vitrail$readDownfall(@Coerce Object climate, EnvironmentAttributeMap attributes,
-			BiomeSpecialEffects effects, BiomeGenerationSettings generation,
-			MobSpawnSettings spawns, CallbackInfo callback) {
+			BiomeSpecialEffects effects, BiomeGenerationSettings generation, CallbackInfo callback) {
 		this.vitrail$downfall = ((BiomeClimateAccessor) climate).vitrail$downfall();
 	}
 

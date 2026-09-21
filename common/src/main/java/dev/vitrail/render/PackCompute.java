@@ -24,25 +24,27 @@ import dev.vitrail.uniform.ClipSpace;
 import dev.vitrail.uniform.UniformCatalog;
 import dev.vitrail.Vitrail;
 
-import com.mojang.blaze3d.GpuDeviceLossException;
-import com.mojang.blaze3d.buffers.GpuBuffer;
-import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import com.mojang.renderpearl.api.device.GpuDeviceLossException;
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.buffers.Std140Builder;
 import com.mojang.blaze3d.pipeline.RenderTarget;
-import com.mojang.blaze3d.systems.CommandEncoder;
-import com.mojang.blaze3d.systems.GpuDevice;
-import com.mojang.blaze3d.systems.GpuDeviceBackend;
+import com.mojang.renderpearl.api.commands.CommandEncoder;
+import com.mojang.renderpearl.api.device.GpuDevice;
+import com.mojang.renderpearl.backend.api.GpuDeviceBackend;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.FilterMode;
-import com.mojang.blaze3d.textures.GpuTextureView;
-import com.mojang.blaze3d.vulkan.VulkanBindGroupLayout;
-import com.mojang.blaze3d.vulkan.VulkanCommandEncoder;
-import com.mojang.blaze3d.vulkan.VulkanDevice;
-import com.mojang.blaze3d.vulkan.VulkanGpuBuffer;
-import com.mojang.blaze3d.vulkan.VulkanGpuSampler;
-import com.mojang.blaze3d.vulkan.VulkanGpuTextureView;
-import com.mojang.blaze3d.vulkan.VulkanUtils;
-import com.mojang.blaze3d.vulkan.glsl.IntermediaryShaderModule;
+import com.mojang.renderpearl.api.textures.FilterMode;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
+import com.mojang.renderpearl.api.pipeline.BindGroupLayout;
+import com.mojang.renderpearl.api.pipeline.UniformType;
+import com.mojang.renderpearl.backend.vulkan.VulkanCommandEncoder;
+import com.mojang.renderpearl.backend.vulkan.VulkanDevice;
+import com.mojang.renderpearl.backend.vulkan.VulkanGpuBuffer;
+import com.mojang.renderpearl.backend.vulkan.VulkanGpuSampler;
+import com.mojang.renderpearl.backend.vulkan.VulkanGpuTextureView;
+import com.mojang.renderpearl.backend.vulkan.VulkanUtils;
+import com.mojang.renderpearl.backend.api.SpvModule;
+import com.mojang.renderpearl.api.pipeline.ShaderType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MappableRingBuffer;
 import org.lwjgl.PointerBuffer;
@@ -742,7 +744,8 @@ final class PackCompute implements AutoCloseable {
 		private boolean allocatedSets;
 		private long pipelineLayout;
 		private long pipeline;
-		private List<VulkanBindGroupLayout.Entry> entries = List.of();
+		private List<BindGroupLayout.UniformDescription> entries = List.of();
+		private Map<String, String> imageFormats = Map.of();
 		private boolean compiled;
 
 		/**
@@ -829,11 +832,12 @@ final class PackCompute implements AutoCloseable {
 			// that names our shaderc options so a graphics COMPUTE through the game's compiler
 			// cannot serve this blob.
 			long began = System.nanoTime();
-			IntermediaryShaderModule module = null;
+			SpvModule module = null;
 			// One state for the key and the patch, as the game's compiler road takes it.
 			RawLocals.begin();
 			try {
 				String source = sharedMemory(unit.text());
+				this.imageFormats = ImageAccessFormats.read(source);
 				String key = ModuleCache.keyOf(source, MODULE_CACHE_STAGE);
 				module = ModuleCache.lookup(key, this.label);
 				ByteBuffer spirv = null;
@@ -855,8 +859,7 @@ final class PackCompute implements AutoCloseable {
 						// Compiled at the performance level, this module has mostly values where
 						// that road has variables, and its undefined reads are what the pass turns
 						// into zeroes here.
-						module = IntermediaryShaderModule.createFromSpirv(this.label,
-								RawLocals.patch(this.label, spirv));
+						module = new PackSpvModule(this.label, RawLocals.patch(this.label, spirv), ShaderType.VERTEX);
 						ModuleCache.store(key, module);
 					}
 
@@ -1077,12 +1080,12 @@ final class PackCompute implements AutoCloseable {
 			VkDescriptorSetLayoutBinding.Buffer bindings =
 					VkDescriptorSetLayoutBinding.calloc(this.entries.isEmpty() ? 0 : count, stack);
 			for (int i = 0; i < this.entries.size(); i++) {
-				VulkanBindGroupLayout.Entry entry = this.entries.get(i);
+				BindGroupLayout.UniformDescription entry = this.entries.get(i);
 				boolean storage = CustomImages.storage(entry.name())
 						|| StorageImages.storageBinding(entry.name())
 						|| COLOUR_IMAGE.matcher(entry.name()).matches();
 				int type;
-				if (entry.type() == VulkanBindGroupLayout.VulkanBindGroupEntryType.UNIFORM_BUFFER) {
+				if (entry.type() == UniformType.UNIFORM_BUFFER) {
 					type = StorageBuffers.named(entry.name()) || servesShared(entry.name())
 							? VK12.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER
 							: VK12.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -1159,12 +1162,12 @@ final class PackCompute implements AutoCloseable {
 
 			VkWriteDescriptorSet.Buffer writes = VkWriteDescriptorSet.calloc(this.entries.size(), stack);
 			for (int i = 0; i < this.entries.size(); i++) {
-				VulkanBindGroupLayout.Entry entry = this.entries.get(i);
+				BindGroupLayout.UniformDescription entry = this.entries.get(i);
 				VkWriteDescriptorSet write = writes.get(i).sType$Default();
 				write.dstBinding(i);
 				write.dstArrayElement(0);
 				write.descriptorCount(1);
-				if (entry.type() == VulkanBindGroupLayout.VulkanBindGroupEntryType.UNIFORM_BUFFER) {
+				if (entry.type() == UniformType.UNIFORM_BUFFER) {
 					if (servesShared(entry.name())) {
 						VkDescriptorBufferInfo.Buffer bufferInfo = VkDescriptorBufferInfo.calloc(1, stack);
 						bufferInfo.buffer(this.sharedBuffer);
@@ -1201,7 +1204,7 @@ final class PackCompute implements AutoCloseable {
 					continue;
 				}
 
-				StorageImages.Bound bound = StorageImages.bound(entry.name());
+				StorageImages.Bound bound = StorageImages.bound(entry.name(), this.imageFormats.get(entry.name()));
 				VkDescriptorImageInfo.Buffer imageInfo = VkDescriptorImageInfo.calloc(1, stack);
 
 				// A texture the pack ships answers here exactly as it answers a full screen pass:
@@ -1273,6 +1276,17 @@ final class PackCompute implements AutoCloseable {
 					// has no such default and its plan carries none.
 					SamplerPlan.Binding byDefault =
 							this.compute.loaded().samplers().binding(entry.name());
+					// A declared but unavailable custom texture has the same black fallback as
+					// a graphics pass. It is a sampled image, not a missing storage allocation.
+					if (byDefault.kind() == SamplerPlan.Kind.PACK_TEXTURE
+							&& targets.black() instanceof VulkanGpuTextureView blank) {
+						imageInfo.sampler(samplerFor(targets, this.compute.loaded().samplers(), entry.name()));
+						imageInfo.imageView(blank.vkImageView());
+						imageInfo.imageLayout(VK12.VK_IMAGE_LAYOUT_GENERAL);
+						write.descriptorType(VK12.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+						write.pImageInfo(imageInfo);
+						continue;
+					}
 					if (byDefault.defaulted()) {
 						String screen = TargetName.canonical(SamplerPlan.DEFAULT_TARGET);
 						// The colour target needs the step, its half being the pass's; the file the

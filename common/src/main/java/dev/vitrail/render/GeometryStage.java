@@ -3,22 +3,19 @@ package dev.vitrail.render;
 import dev.vitrail.glsl.GeometryFold;
 import dev.vitrail.glsl.PackProgram;
 import dev.vitrail.glsl.TranslatedUnit;
-import dev.vitrail.mixin.access.IntermediaryShaderModuleAccessor;
 import dev.vitrail.pack.model.ProgramStage;
 import dev.vitrail.Vitrail;
 
-import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.preprocessor.GlslPreprocessor;
-import com.mojang.blaze3d.shaders.ShaderType;
-import com.mojang.blaze3d.vulkan.VulkanDevice;
-import com.mojang.blaze3d.vulkan.glsl.GlslCompiler;
-import com.mojang.blaze3d.vulkan.glsl.IntermediaryShaderModule;
-import com.mojang.blaze3d.vulkan.glsl.ShaderCompileException;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.pipeline.ShaderType;
+import com.mojang.renderpearl.frontend.shaders.GlslCompiler;
+import com.mojang.renderpearl.backend.api.SpvModule;
+import dev.vitrail.render.api.PackShaderSource;
+import com.mojang.renderpearl.util.ShaderCompileException;
 import org.lwjgl.system.MemoryUtil;
 import org.lwjgl.util.shaderc.Shaderc;
 import org.lwjgl.vulkan.VK12;
 
-import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -91,23 +88,6 @@ public final class GeometryStage {
 	public static final int STAGE_BIT = VK12.VK_SHADER_STAGE_GEOMETRY_BIT;
 
 	/**
-	 * The name of a reflected input or output variable. The record is package-private in the game
-	 * and NeoForge refuses a second export of that package, which is why {@link ComputeShader}
-	 * reads its neighbours the same way.
-	 */
-	private static final Method VARIABLE_NAME;
-
-	static {
-		try {
-			Class<?> variable = Class.forName("com.mojang.blaze3d.vulkan.glsl.SpvVariable");
-			VARIABLE_NAME = variable.getDeclaredMethod("name");
-			VARIABLE_NAME.setAccessible(true);
-		} catch (ReflectiveOperationException e) {
-			throw new ExceptionInInitializerError(e);
-		}
-	}
-
-	/**
 	 * The stage each pipeline ships, weak on the pipeline for the reason {@link ShadowCompare}'s
 	 * registry is: the entry describes the pipeline's lifetime and goes with it on a pack change.
 	 */
@@ -121,27 +101,8 @@ public final class GeometryStage {
 
 	private static final ThreadLocal<Boolean> COMPILING = new ThreadLocal<>();
 
-	private static final ThreadLocal<InFlight> BUILDING = new ThreadLocal<>();
 
 	private GeometryStage() {
-	}
-
-	/** The module being built into the pipeline this thread is compiling. */
-	private static final class InFlight {
-
-		private final RenderPipeline pipeline;
-
-		private IntermediaryShaderModule module;
-
-		/** Kept so that a build abandoned after the device module was made can still free it. */
-		private VulkanDevice device;
-
-		private long handle;
-
-		private InFlight(RenderPipeline pipeline, IntermediaryShaderModule module) {
-			this.pipeline = pipeline;
-			this.module = module;
-		}
 	}
 
 	/**
@@ -262,12 +223,17 @@ public final class GeometryStage {
 		// memory stack: a translated stage carries the pack's whole settings header and runs to tens
 		// of kilobytes, against a stack of sixty-four.
 		ByteBuffer source = MemoryUtil.memUTF8(
-				GlslPreprocessor.injectDefines(geometry, pipeline.getShaderDefines()), false);
+				geometry, false);
 		ByteBuffer name = MemoryUtil.memUTF8(path);
 		ByteBuffer entry = MemoryUtil.memUTF8("main");
+        long options = Shaderc.shaderc_compile_options_initialize();
+        pipeline.getShaderDefines().values().forEach((key, value) ->
+                Shaderc.shaderc_compile_options_add_macro_definition(options, key, value));
+        pipeline.getShaderDefines().flags().forEach(flag ->
+                Shaderc.shaderc_compile_options_add_macro_definition(options, flag, ""));
 		try {
 			long result = Shaderc.shaderc_compile_into_preprocessed_text(compiler, source,
-					Shaderc.shaderc_glsl_geometry_shader, name, entry, 0L);
+					Shaderc.shaderc_glsl_geometry_shader, name, entry, options);
 			if (result == 0L) {
 				return GeometryFold.Result.refused("could not be read, shaderc giving no result");
 			}
@@ -288,6 +254,7 @@ public final class GeometryStage {
 			MemoryUtil.memFree(entry);
 			MemoryUtil.memFree(name);
 			MemoryUtil.memFree(source);
+			Shaderc.shaderc_compile_options_release(options);
 			Shaderc.shaderc_compiler_release(compiler);
 		}
 	}
@@ -308,148 +275,25 @@ public final class GeometryStage {
 		return noted;
 	}
 
-	/**
-	 * Compiles the geometry stage of the pipeline being built, and holds it on this thread until
-	 * the pipeline has taken it. Answers null for a pipeline that ships none, which is the case
-	 * every caller is written around.
-	 * <p>
-	 * A module left over from a build that threw between the compiler and the pipeline is dropped
-	 * here rather than at the point it was abandoned: that point is an exception path with no
-	 * device in hand, and a stage module bound into no pipeline holds nothing but its own memory.
-	 */
-	public static IntermediaryShaderModule begin(GlslCompiler compiler, RenderPipeline pipeline)
-			throws ShaderCompileException {
-		abandon();
-		if (!noted) {
-			return null;
-		}
-
+	/** Compiles an optional geometry stage through the same RenderPearl compiler as other stages. */
+	public static SpvModule begin(GlslCompiler compiler, RenderPipeline pipeline) throws ShaderCompileException {
 		String text = SHIPPED.get(pipeline);
 		if (text == null) {
 			return null;
 		}
-
-		IntermediaryShaderModule module;
 		COMPILING.set(Boolean.TRUE);
 		try {
-			module = compiler.createIntermediary(pipeline.getLocation().toDebugFileName() + "/gsh",
-					GlslPreprocessor.injectDefines(text, pipeline.getShaderDefines()),
-					ShaderType.VERTEX);
+			PackShaderSource noIncludes = (id, type) -> null;
+			return compiler.compileToSpv(pipeline.getLocation().toDebugFileName() + "/gsh", text,
+					ShaderType.VERTEX, pipeline.getShaderDefines(), noIncludes);
 		} finally {
 			COMPILING.remove();
 		}
-
-		BUILDING.set(new InFlight(pipeline, module));
-
-		return module;
 	}
 
-	/** Whether the unit shaderc is being asked for right now is a geometry stage. */
+	/** Selects shaderc's geometry stage while compiling that source. */
 	public static boolean compiling() {
 		return Boolean.TRUE.equals(COMPILING.get());
-	}
-
-	/** The module this thread is building into its pipeline, or null. */
-	public static IntermediaryShaderModule building() {
-		InFlight flight = BUILDING.get();
-
-		return flight == null ? null : flight.module;
-	}
-
-	/**
-	 * Whether the pipeline this thread is building carries a geometry stage, asked by the bind
-	 * group layout so the stage bit lands on the layouts that need it and on no others. True from
-	 * the moment the unit is compiled until the pipeline has taken it, which spans the one call
-	 * that creates the layout.
-	 */
-	public static boolean buildingHere() {
-		return BUILDING.get() != null;
-	}
-
-	/** The names of a module's outputs, in the order {@code createFromSpirv} numbered them. */
-	public static List<String> outputs(IntermediaryShaderModule module) {
-		List<String> names = new ArrayList<>();
-		for (Object output : ((IntermediaryShaderModuleAccessor) (Object) module).vitrail$outputs()) {
-			try {
-				names.add((String) VARIABLE_NAME.invoke(output));
-			} catch (ReflectiveOperationException e) {
-				throw new IllegalStateException(e);
-			}
-		}
-
-		return names;
-	}
-
-	/**
-	 * Creates the device module for the stage in flight, once the bindings have been rebound onto
-	 * its bytes. The intermediary is closed on the spot, as the two stages beside it are on the
-	 * road this engine drives itself: its bytes are in the device module from here on.
-	 */
-	public static void built(VulkanDevice device) {
-		InFlight flight = BUILDING.get();
-		if (flight == null || flight.module == null) {
-			return;
-		}
-
-		flight.device = device;
-		flight.handle = flight.module.createVulkanShaderModule(device);
-		flight.module.close();
-		flight.module = null;
-	}
-
-	/**
-	 * The device module to put behind the vertex and fragment stages of this pipeline, or zero.
-	 * Answers zero for any pipeline but the one this thread is building, so a leftover cannot be
-	 * bound into a neighbour.
-	 */
-	public static long pending(RenderPipeline pipeline) {
-		InFlight flight = BUILDING.get();
-
-		return flight != null && flight.pipeline == pipeline ? flight.handle : 0L;
-	}
-
-	/**
-	 * Called once the pipelines are created. A shader module is consumed at pipeline creation, so
-	 * this is where it stops being anything.
-	 * <p>
-	 * The pipeline that returned is compared against the one the stage was compiled for, and a
-	 * mismatch leaves the stage alone: this runs at the return of every pipeline the process
-	 * builds, the game's own among them, and freeing on the wrong one would take a stage that
-	 * another pipeline is still owed.
-	 */
-	public static void taken(RenderPipeline pipeline) {
-		InFlight flight = BUILDING.get();
-		if (flight == null || flight.pipeline != pipeline) {
-			return;
-		}
-
-		BUILDING.remove();
-		free(flight);
-	}
-
-	/**
-	 * Drops what a build that threw between the compiler and the pipeline left behind, at the head
-	 * of the next build on this thread. The device module goes with it: the device is kept on the
-	 * way past for exactly this, nothing here having one in hand.
-	 */
-	private static void abandon() {
-		InFlight flight = BUILDING.get();
-		if (flight == null) {
-			return;
-		}
-
-		BUILDING.remove();
-		free(flight);
-	}
-
-	private static void free(InFlight flight) {
-		if (flight.module != null) {
-			flight.module.close();
-		}
-
-		if (flight.handle != 0L && flight.device != null) {
-			VK12.vkDestroyShaderModule(flight.device.vkDevice(), flight.handle, null);
-		}
 	}
 
 	/** Called when the client shuts down. */

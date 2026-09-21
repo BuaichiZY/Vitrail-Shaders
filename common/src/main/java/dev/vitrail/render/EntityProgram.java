@@ -8,13 +8,13 @@ import dev.vitrail.pack.target.ChainPlan;
 import dev.vitrail.pack.target.TargetPlan;
 import dev.vitrail.Vitrail;
 
-import com.mojang.blaze3d.platform.CompareOp;
-import com.mojang.blaze3d.pipeline.BlendFunction;
-import com.mojang.blaze3d.pipeline.DepthStencilState;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.systems.GpuDevice;
-import com.mojang.blaze3d.textures.GpuSampler;
-import com.mojang.blaze3d.textures.GpuTextureView;
+import com.mojang.renderpearl.api.pipeline.CompareOp;
+import com.mojang.renderpearl.api.pipeline.BlendFunction;
+import com.mojang.renderpearl.api.pipeline.DepthStencilState;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.device.GpuDevice;
+import com.mojang.renderpearl.api.textures.GpuSampler;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
 
 import org.joml.Matrix4fc;
 
@@ -181,7 +181,7 @@ final class EntityProgram extends FamilyProgram {
 				// the map's refusal is about the target, the lookup is about the program name.
 				shadow ? Optional.<BlendFunction>empty()
 						: BlendFunctions.of(ProgramFallbacks.blendOverride(element.program()),
-								game.getColorTargetState().blendFunction()),
+								game.getColorTargetStates().getFirst().blendFunction()),
 				// covers: the mask on every piece drawn before the seed and on no other, which is
 				// Element.covers and is answered there, beside the question of which side of the
 				// stage a piece is drawn on. It is what takes draw buffer nought of those pieces off

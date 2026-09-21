@@ -34,9 +34,7 @@ public abstract class TextSubmitMixin implements BlockEntityOrigin {
 	private boolean vitrail$blockEntity;
 
 	@Inject(method = "<init>", at = @At("RETURN"), require = 1)
-	private void vitrail$capture(Matrix4fc pose, float x, float y, FormattedCharSequence string,
-			boolean dropShadow, Font.DisplayMode displayMode, int lightCoords, int color,
-			int backgroundColor, int outlineColor, CallbackInfo callback) {
+	private void vitrail$capture(CallbackInfo callback) {
 		this.vitrail$blockEntity = BlockEntityGeometry.submitting();
 	}
 

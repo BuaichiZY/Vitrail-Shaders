@@ -1,85 +1,98 @@
 package dev.vitrail.screen;
 
-import org.lwjgl.PointerBuffer;
-import org.lwjgl.system.MemoryStack;
-import org.lwjgl.util.tinyfd.TinyFileDialogs;
-
+import java.nio.ByteBuffer;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.ConcurrentHashMap;
+import net.minecraft.client.Minecraft;
+import org.lwjgl.sdl.SDLDialog;
+import org.lwjgl.sdl.SDLError;
+import org.lwjgl.sdl.SDLProperties;
+import org.lwjgl.sdl.SDL_DialogFileCallback;
+import org.lwjgl.sdl.SDL_DialogFileFilter;
+import org.lwjgl.system.MemoryUtil;
 
-/**
- * The platform's own "which file" window, for importing and exporting a pack's settings. This is
- * Iris's {@code FileDialogUtil}.
- * <p>
- * <b>On a thread of its own, and that is the whole reason this class exists</b>: the dialog does not
- * return until the player has answered it, and asking on the render thread would freeze the game
- * behind a window the game is not drawing. The answer comes back as a
- * {@link CompletableFuture}, so whoever asked has to check that the screen is still the one it was
- * before acting on it.
- */
+/** Asynchronous native SDL dialogs, with callback and filter storage held until completion. */
 public final class FileDialog {
+    private static final Set<Request> ACTIVE = ConcurrentHashMap.newKeySet();
 
-	/** One thread, kept: two of these windows at once is not a thing any platform handles well. */
-	private static final ExecutorService DIALOGS = Executors.newSingleThreadExecutor(runnable -> {
-		Thread thread = new Thread(runnable, "Vitrail file dialog");
-		// Daemon, so that a dialog nobody answered cannot keep the game from closing.
-		thread.setDaemon(true);
+    public enum Kind { OPEN, SAVE }
 
-		return thread;
-	});
+    private FileDialog() {
+    }
 
-	/** What the window offers to show, and what a settings file is called. */
-	private static final String FILTER = "*.txt";
-	private static final String FILTER_LABEL = "Shader Pack Settings (.txt)";
+    public static CompletableFuture<Optional<Path>> choose(Kind kind, String title, Path origin) {
+        CompletableFuture<Optional<Path>> answer = new CompletableFuture<>();
+        Minecraft.getInstance().schedule(() -> {
+            Request request = new Request(answer);
+            ACTIVE.add(request);
+            try {
+                request.show(kind, title, origin);
+            } catch (RuntimeException | LinkageError e) {
+                request.close();
+                answer.completeExceptionally(e);
+            }
+        });
+        return answer;
+    }
 
-	public enum Kind {
-		OPEN, SAVE
-	}
+    private static final class Request {
+        private final CompletableFuture<Optional<Path>> answer;
+        private final ByteBuffer label = MemoryUtil.memUTF8("Shader Pack Settings (.txt)");
+        private final ByteBuffer pattern = MemoryUtil.memUTF8("txt");
+        private final SDL_DialogFileFilter.Buffer filters = SDL_DialogFileFilter.calloc(1);
+        private final SDL_DialogFileCallback callback;
+        private int properties;
 
-	private FileDialog() {
-	}
+        private Request(CompletableFuture<Optional<Path>> answer) {
+            this.answer = answer;
+            this.filters.get(0).name(this.label).pattern(this.pattern);
+            this.callback = SDL_DialogFileCallback.create((userdata, files, filter) -> {
+                try {
+                    if (files == 0L) {
+                        this.answer.completeExceptionally(new IllegalStateException(SDLError.SDL_GetError()));
+                    } else {
+                        long first = MemoryUtil.memGetAddress(files);
+                        this.answer.complete(first == 0L ? Optional.empty()
+                                : Optional.of(Path.of(MemoryUtil.memUTF8(first))));
+                    }
+                } catch (RuntimeException e) {
+                    this.answer.completeExceptionally(e);
+                } finally {
+                    // Queue disposal after this native callback returns, even on the main thread.
+                    Minecraft.getInstance().schedule(this::close);
+                }
+            });
+        }
 
-	/**
-	 * Asks the platform for a file.
-	 *
-	 * @param title  the window's own title, which is not translated: it is handed to the platform
-	 *               rather than drawn by the game, and Iris leaves its own untranslated for the same
-	 *               reason
-	 * @param origin where the window opens, which is the file the settings are usually kept in
-	 * @return the file chosen, or nothing when the window was dismissed
-	 */
-	public static CompletableFuture<Optional<Path>> choose(Kind kind, String title, Path origin) {
-		CompletableFuture<Optional<Path>> answer = new CompletableFuture<>();
+        private void show(Kind kind, String title, Path origin) {
+            this.properties = SDLProperties.SDL_CreateProperties();
+            if (this.properties == 0) {
+                throw new IllegalStateException(SDLError.SDL_GetError());
+            }
+            SDLProperties.SDL_SetStringProperty(this.properties, SDLDialog.SDL_PROP_FILE_DIALOG_TITLE_STRING, title);
+            SDLProperties.SDL_SetStringProperty(this.properties, SDLDialog.SDL_PROP_FILE_DIALOG_LOCATION_STRING, origin.toAbsolutePath().toString());
+            SDLProperties.SDL_SetPointerProperty(this.properties, SDLDialog.SDL_PROP_FILE_DIALOG_FILTERS_POINTER, this.filters.address());
+            SDLProperties.SDL_SetNumberProperty(this.properties, SDLDialog.SDL_PROP_FILE_DIALOG_NFILTERS_NUMBER, 1L);
+            SDLProperties.SDL_SetPointerProperty(this.properties, SDLDialog.SDL_PROP_FILE_DIALOG_WINDOW_POINTER,
+                    Minecraft.getInstance().getWindow().handle());
+            SDLDialog.SDL_ShowFileDialogWithProperties(kind == Kind.SAVE
+                    ? SDLDialog.SDL_FILEDIALOG_SAVEFILE : SDLDialog.SDL_FILEDIALOG_OPENFILE,
+                    this.callback, 0L, this.properties);
+        }
 
-		DIALOGS.submit(() -> {
-			try {
-				answer.complete(Optional.ofNullable(ask(kind, title, origin)).map(Paths::get));
-			} catch (RuntimeException | LinkageError e) {
-				// A platform with no dialog to offer is not a broken screen, so the failure goes back
-				// through the future and the caller says it once rather than throwing on this thread,
-				// where nothing would see it.
-				answer.completeExceptionally(e);
-			}
-		});
-
-		return answer;
-	}
-
-	private static String ask(Kind kind, String title, Path origin) {
-		try (MemoryStack stack = MemoryStack.stackPush()) {
-			PointerBuffer filters = stack.mallocPointer(1);
-			filters.put(stack.UTF8(FILTER));
-			filters.flip();
-
-			String at = origin.toAbsolutePath().toString();
-
-			return kind == Kind.SAVE
-					? TinyFileDialogs.tinyfd_saveFileDialog(title, at, filters, FILTER_LABEL)
-					: TinyFileDialogs.tinyfd_openFileDialog(title, at, filters, FILTER_LABEL, false);
-		}
-	}
+        private void close() {
+            if (ACTIVE.remove(this)) {
+                if (this.properties != 0) {
+                    SDLProperties.SDL_DestroyProperties(this.properties);
+                }
+                this.callback.free();
+                this.filters.free();
+                MemoryUtil.memFree(this.label);
+                MemoryUtil.memFree(this.pattern);
+            }
+        }
+    }
 }

@@ -4,21 +4,21 @@ import dev.vitrail.pack.model.TargetName;
 import dev.vitrail.pack.target.ChainPlan;
 import dev.vitrail.Vitrail;
 
-import com.mojang.blaze3d.GpuFormat;
-import com.mojang.blaze3d.PrimitiveTopology;
-import com.mojang.blaze3d.buffers.GpuBuffer;
-import com.mojang.blaze3d.pipeline.BindGroupLayout;
-import com.mojang.blaze3d.pipeline.ColorTargetState;
-import com.mojang.blaze3d.pipeline.CompiledRenderPipeline;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.shaders.ShaderSource;
-import com.mojang.blaze3d.shaders.ShaderType;
-import com.mojang.blaze3d.systems.CommandEncoder;
-import com.mojang.blaze3d.systems.GpuDevice;
-import com.mojang.blaze3d.systems.RenderPass;
+import com.mojang.renderpearl.api.GpuFormat;
+import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.pipeline.BindGroupLayout;
+import com.mojang.renderpearl.api.pipeline.ColorTargetState;
+import com.mojang.renderpearl.api.pipeline.CompiledRenderPipeline;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import dev.vitrail.render.api.PackShaderSource;
+import com.mojang.renderpearl.api.pipeline.ShaderType;
+import com.mojang.renderpearl.api.commands.CommandEncoder;
+import com.mojang.renderpearl.api.device.GpuDevice;
+import com.mojang.renderpearl.api.commands.RenderPass;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.FilterMode;
-import com.mojang.blaze3d.textures.GpuTextureView;
+import com.mojang.renderpearl.api.textures.FilterMode;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import net.minecraft.client.renderer.BindGroupLayouts;
 import net.minecraft.resources.Identifier;
@@ -100,7 +100,7 @@ final class ChainPresent {
 
 	private final ChainPlan.Attachment from;
 	private final RenderPipeline pipeline;
-	private final ShaderSource source;
+	private final PackShaderSource source;
 
 	private boolean reported;
 
@@ -120,7 +120,7 @@ final class ChainPresent {
 				.withFragmentShader(FRAGMENT_ID)
 				.withBindGroupLayout(BindGroupLayouts.GLOBALS)
 				.withBindGroupLayout(BindGroupLayout.builder()
-						.withSampler(SAMPLER)
+						.withUniform(SAMPLER, com.mojang.renderpearl.api.pipeline.UniformType.COMBINED_IMAGE_SAMPLER)
 						.build())
 				.withVertexBinding(0, DefaultVertexFormat.POSITION_TEX)
 				.withColorTargetState(new ColorTargetState(Optional.empty(), SCREEN_FORMAT,
@@ -139,12 +139,12 @@ final class ChainPresent {
 	 * load in its name, so no purge ever carries it over: it comes back new every time.
 	 */
 	CompiledRenderPipeline compiled(GpuDevice device) {
-		return device.precompilePipeline(this.pipeline, this.source);
+		return PackPipelines.compile(device, this.pipeline, this.source);
 	}
 
 	/** Called every frame: a resource reload empties the pipeline cache. */
 	boolean prepare(GpuDevice device) {
-		if (compiled(device).isValid()) {
+		if (PackPipelines.valid(compiled(device))) {
 			return true;
 		}
 
@@ -174,12 +174,12 @@ final class ChainPresent {
 		}
 
 		try (RenderPass pass = encoder.createRenderPass(() -> LABEL, into, Optional.empty())) {
-			pass.setPipeline(this.pipeline);
+			pass.setPipeline(PackPipelines.get(this.pipeline));
 			RenderSystem.bindDefaultUniforms(pass);
 			pass.setVertexBuffer(0, quad.slice());
 			// NEAREST, the target being the size of the screen: one texel is one pixel and the
 			// value wanted is the one the chain wrote, not a blend of it with its neighbour.
-			pass.bindTexture(SAMPLER, view,
+			pass.setUniform(SAMPLER, view,
 					RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
 			pass.draw(VERTICES, 1, 0, 0);
 		}

@@ -39,9 +39,7 @@ public abstract class ModelSubmitMixin implements BlockEntityOrigin, SubmittedId
 	private long vitrail$identifiers;
 
 	@Inject(method = "<init>", at = @At("RETURN"), require = 1)
-	private void vitrail$capture(RenderType renderType, PoseStack.Pose pose, Model<?> model,
-			Object state, int lightCoords, int overlayCoords, int tintedColor,
-			TextureAtlasSprite sprite, PoseStack.Pose sheetedDecalPose, CallbackInfo callback) {
+	private void vitrail$capture(CallbackInfo callback) {
 		this.vitrail$blockEntity = BlockEntityGeometry.submitting();
 		this.vitrail$identifiers = EntityIdentifiers.packed();
 	}

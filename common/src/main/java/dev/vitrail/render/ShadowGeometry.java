@@ -3,7 +3,7 @@ package dev.vitrail.render;
 import dev.vitrail.pack.source.ShadowCasters;
 import dev.vitrail.Vitrail;
 
-import com.mojang.blaze3d.GpuDeviceLossException;
+import com.mojang.renderpearl.api.device.GpuDeviceLossException;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Camera;
 import net.minecraft.client.DeltaTracker;
@@ -198,7 +198,7 @@ public final class ShadowGeometry {
 		// extraction (GameRenderer.java:391); Iris passes its captured tick delta. It reaches only the
 		// hurt and death timers of the camera entity's state (Camera.java:143-144).
 		view.extractRenderState(STATE.cameraRenderState,
-				view.getCameraEntityPartialTicks(minecraft.getDeltaTracker()));
+				minecraft.getDeltaTracker());
 		if (!TerrainDraw.drawnShadowPair(STATE.cameraRenderState.viewRotationMatrix,
 				STATE.cameraRenderState.projectionMatrix)) {
 			return;
@@ -323,8 +323,9 @@ public final class ShadowGeometry {
 		say(gathered, gatheredBlocks);
 
 		EntityDraw.shadowFeatures(true);
-		try {
-			dispatcher.renderAllFeatures(storage);
+		try (var frame = dispatcher.prepareFrame(storage);
+				var pass = ScenePass.features()) {
+			FeatureRenderDispatcher.renderAllFeatures(pass, frame);
 		} finally {
 			// Lowered whatever happened, and this is the one flag of the three that nothing else
 			// would lower: the other two are closed by the game's own events, and there is no event
@@ -507,7 +508,8 @@ public final class ShadowGeometry {
 		}
 
 		Player player = minecraft.player;
-		if (!entities.shouldRender(entity, frustum, at.x, at.y, at.z)
+		if (!entities.shouldRender(entity, frustum, at.x, at.y, at.z,
+				minecraft.getDeltaTracker().getGameTimeDeltaPartialTick(false))
 				&& (player == null || !entity.hasIndirectPassenger(player))) {
 			return false;
 		}
@@ -515,7 +517,8 @@ public final class ShadowGeometry {
 		BlockPos block = entity.blockPosition();
 
 		return minecraft.level.isOutsideBuildHeight(block.getY())
-				|| minecraft.levelRenderer.isSectionCompiledAndVisible(block);
+				|| minecraft.levelRenderer.isSectionCompiledAndVisible(block, net.minecraft.core.SectionPos.asLong(
+					minecraft.gameRenderer.mainCamera().blockPosition()));
 	}
 
 	/** Poses everything extracted about the camera and hands it to our own storage. */

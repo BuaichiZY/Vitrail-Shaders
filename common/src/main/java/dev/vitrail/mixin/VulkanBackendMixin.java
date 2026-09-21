@@ -2,9 +2,9 @@ package dev.vitrail.mixin;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import com.mojang.blaze3d.vulkan.VulkanBackend;
-import com.mojang.blaze3d.vulkan.VulkanPhysicalDevice;
-import com.mojang.blaze3d.vulkan.init.VulkanFeature;
+import com.mojang.renderpearl.backend.vulkan.VulkanBackend;
+import com.mojang.renderpearl.backend.vulkan.VulkanPhysicalDevice;
+import com.mojang.renderpearl.backend.vulkan.init.VulkanFeature;
 import dev.vitrail.glsl.SharedMemory;
 import dev.vitrail.glsl.VendorExtensions;
 import dev.vitrail.pack.model.ProgramStage;
@@ -65,27 +65,27 @@ public abstract class VulkanBackendMixin {
 
 	@Unique
 	private static final VulkanFeature VERTEX_STORES = new VulkanFeature(
-			VulkanBackend.VK10_FEATURES_STRUCT, "vertexPipelineStoresAndAtomics",
+			com.mojang.renderpearl.backend.vulkan.VulkanFeatureSets.VK10_FEATURES_STRUCT, "vertexPipelineStoresAndAtomics",
 			VkPhysicalDeviceFeatures.VERTEXPIPELINESTORESANDATOMICS);
 
 	@Unique
 	private static final VulkanFeature FRAGMENT_STORES = new VulkanFeature(
-			VulkanBackend.VK10_FEATURES_STRUCT, "fragmentStoresAndAtomics",
+			com.mojang.renderpearl.backend.vulkan.VulkanFeatureSets.VK10_FEATURES_STRUCT, "fragmentStoresAndAtomics",
 			VkPhysicalDeviceFeatures.FRAGMENTSTORESANDATOMICS);
 
 	@Unique
 	private static final VulkanFeature EXTENDED_FORMATS = new VulkanFeature(
-			VulkanBackend.VK10_FEATURES_STRUCT, "shaderStorageImageExtendedFormats",
+			com.mojang.renderpearl.backend.vulkan.VulkanFeatureSets.VK10_FEATURES_STRUCT, "shaderStorageImageExtendedFormats",
 			VkPhysicalDeviceFeatures.SHADERSTORAGEIMAGEEXTENDEDFORMATS);
 
 	@Unique
 	private static final VulkanFeature WRITE_WITHOUT_FORMAT = new VulkanFeature(
-			VulkanBackend.VK10_FEATURES_STRUCT, "shaderStorageImageWriteWithoutFormat",
+			com.mojang.renderpearl.backend.vulkan.VulkanFeatureSets.VK10_FEATURES_STRUCT, "shaderStorageImageWriteWithoutFormat",
 			VkPhysicalDeviceFeatures.SHADERSTORAGEIMAGEWRITEWITHOUTFORMAT);
 
 	@Unique
 	private static final VulkanFeature INDEPENDENT_BLEND = new VulkanFeature(
-			VulkanBackend.VK10_FEATURES_STRUCT, "independentBlend",
+			com.mojang.renderpearl.backend.vulkan.VulkanFeatureSets.VK10_FEATURES_STRUCT, "independentBlend",
 			VkPhysicalDeviceFeatures.INDEPENDENTBLEND);
 
 	// The narrow arithmetic a pack written for a recent card asks for. RenderPearl computes in
@@ -102,44 +102,44 @@ public abstract class VulkanBackendMixin {
 	// pack of the corpus declares one.
 	@Unique
 	private static final VulkanFeature SHADER_FLOAT16 = new VulkanFeature(
-			VulkanBackend.VK12_FEATURES_STRUCT, "shaderFloat16",
+			com.mojang.renderpearl.backend.vulkan.VulkanFeatureSets.VK12_FEATURES_STRUCT, "shaderFloat16",
 			VkPhysicalDeviceVulkan12Features.SHADERFLOAT16);
 
 	@Unique
 	private static final VulkanFeature SHADER_INT8 = new VulkanFeature(
-			VulkanBackend.VK12_FEATURES_STRUCT, "shaderInt8",
+			com.mojang.renderpearl.backend.vulkan.VulkanFeatureSets.VK12_FEATURES_STRUCT, "shaderInt8",
 			VkPhysicalDeviceVulkan12Features.SHADERINT8);
 
 	@Unique
 	private static final VulkanFeature SHADER_INT16 = new VulkanFeature(
-			VulkanBackend.VK10_FEATURES_STRUCT, "shaderInt16",
+			com.mojang.renderpearl.backend.vulkan.VulkanFeatureSets.VK10_FEATURES_STRUCT, "shaderInt16",
 			VkPhysicalDeviceFeatures.SHADERINT16);
 
 	// Subgroup operations over those types, which the pack reaches through the extended types
 	// subgroup extensions: a reduction over a half vector is refused without this one.
 	@Unique
 	private static final VulkanFeature SUBGROUP_EXTENDED = new VulkanFeature(
-			VulkanBackend.VK12_FEATURES_STRUCT, "shaderSubgroupExtendedTypes",
+			com.mojang.renderpearl.backend.vulkan.VulkanFeatureSets.VK12_FEATURES_STRUCT, "shaderSubgroupExtendedTypes",
 			VkPhysicalDeviceVulkan12Features.SHADERSUBGROUPEXTENDEDTYPES);
 
 	@Unique
 	private static final VulkanFeature STORAGE_16 = new VulkanFeature(
-			VulkanBackend.VK11_FEATURES_STRUCT, "storageBuffer16BitAccess",
+			com.mojang.renderpearl.backend.vulkan.VulkanFeatureSets.VK11_FEATURES_STRUCT, "storageBuffer16BitAccess",
 			VkPhysicalDeviceVulkan11Features.STORAGEBUFFER16BITACCESS);
 
 	@Unique
 	private static final VulkanFeature UNIFORM_STORAGE_16 = new VulkanFeature(
-			VulkanBackend.VK11_FEATURES_STRUCT, "uniformAndStorageBuffer16BitAccess",
+			com.mojang.renderpearl.backend.vulkan.VulkanFeatureSets.VK11_FEATURES_STRUCT, "uniformAndStorageBuffer16BitAccess",
 			VkPhysicalDeviceVulkan11Features.UNIFORMANDSTORAGEBUFFER16BITACCESS);
 
 	@Unique
 	private static final VulkanFeature STORAGE_8 = new VulkanFeature(
-			VulkanBackend.VK12_FEATURES_STRUCT, "storageBuffer8BitAccess",
+			com.mojang.renderpearl.backend.vulkan.VulkanFeatureSets.VK12_FEATURES_STRUCT, "storageBuffer8BitAccess",
 			VkPhysicalDeviceVulkan12Features.STORAGEBUFFER8BITACCESS);
 
 	@Unique
 	private static final VulkanFeature UNIFORM_STORAGE_8 = new VulkanFeature(
-			VulkanBackend.VK12_FEATURES_STRUCT, "uniformAndStorageBuffer8BitAccess",
+			com.mojang.renderpearl.backend.vulkan.VulkanFeatureSets.VK12_FEATURES_STRUCT, "uniformAndStorageBuffer8BitAccess",
 			VkPhysicalDeviceVulkan12Features.UNIFORMANDSTORAGEBUFFER8BITACCESS);
 
 	// The stage a pack puts between its vertex and its fragment stage. Iris links a .gsh whenever
@@ -147,7 +147,7 @@ public abstract class VulkanBackendMixin {
 	// feature, and the game, which has no geometry stage of its own, never asks for it.
 	@Unique
 	private static final VulkanFeature GEOMETRY_SHADER = new VulkanFeature(
-			VulkanBackend.VK10_FEATURES_STRUCT, "geometryShader",
+			com.mojang.renderpearl.backend.vulkan.VulkanFeatureSets.VK10_FEATURES_STRUCT, "geometryShader",
 			VkPhysicalDeviceFeatures.GEOMETRYSHADER);
 
 	// The Vulkan stage bit of each stage a pack ships, to read the stages a device names.
@@ -178,16 +178,12 @@ public abstract class VulkanBackendMixin {
 	private static final String GEOMETRY = "a program shipping a geometry stage is refused unless "
 			+ "that stage only hands each corner on, which is folded into the fragment stage";
 
-	@WrapOperation(method = "createDevice(JLcom/mojang/blaze3d/shaders/ShaderSource;"
-			+ "Lcom/mojang/blaze3d/shaders/GpuDebugOptions;Ljava/lang/Runnable;)"
-			+ "Lcom/mojang/blaze3d/systems/GpuDevice;", require = 1,
-			at = @At(value = "INVOKE",
-					target = "Lcom/mojang/blaze3d/vulkan/VulkanBackend;createDevice("
-							+ "Ljava/util/Collection;Lcom/mojang/blaze3d/vulkan/VulkanPhysicalDevice;"
-							+ "Ljava/util/Set;)Lorg/lwjgl/vulkan/VkDevice;"))
-	private VkDevice vitrail$deviceFeatures(Collection<String> extensions,
-			VulkanPhysicalDevice physical, Set<VulkanFeature> features,
-			Operation<VkDevice> original) {
+	@WrapOperation(method = "createDevice(Lcom/mojang/renderpearl/api/device/GpuDebugOptions;)Lcom/mojang/renderpearl/api/device/GpuDevice;", require = 1,
+            at = @At(value = "INVOKE", target = "Lcom/mojang/renderpearl/backend/vulkan/VulkanBackend;createDevice(Lcom/mojang/renderpearl/backend/vulkan/init/FeatureSet;Lcom/mojang/renderpearl/backend/vulkan/VulkanPhysicalDevice;)Lorg/lwjgl/vulkan/VkDevice;"))
+    private VkDevice vitrail$deviceFeatures(com.mojang.renderpearl.backend.vulkan.init.FeatureSet originalFeatures,
+            VulkanPhysicalDevice physical, Operation<VkDevice> original) {
+        Set<String> extensions = new java.util.HashSet<>(originalFeatures.extensions());
+        Set<VulkanFeature> features = new java.util.HashSet<>(originalFeatures.features());
 		List<String> enabled = new ArrayList<>();
 		enable(physical, features, VERTEX_STORES, enabled, VOXELS);
 		enable(physical, features, FRAGMENT_STORES, enabled, VOXELS);
@@ -231,7 +227,8 @@ public abstract class VulkanBackendMixin {
 			Vitrail.logger().info("Vulkan device features: {}", String.join(", ", enabled));
 		}
 
-		return original.call(extensions, physical, features);
+		return original.call(new com.mojang.renderpearl.backend.vulkan.init.FeatureSet(
+				originalFeatures.name(), extensions, features, originalFeatures.condition()), physical);
 	}
 
 	@Unique

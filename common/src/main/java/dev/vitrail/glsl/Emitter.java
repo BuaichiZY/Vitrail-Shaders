@@ -130,7 +130,7 @@ record Emitter(ProgramStage stage, VertexInputs inputs, List<String> bound, Alph
 			switch (this.inputs) {
 				case FULLSCREEN -> {
 					lines.addAll(LegacyGlsl.FULLSCREEN_ATTRIBUTES);
-					lines.addAll(VertexPrologue.tail(this.used, this.synthesized));
+					lines.addAll(VertexPrologue.fullscreenTail(this.used, this.synthesized));
 				}
 				case TERRAIN, TERRAIN_SEPARATE_AO -> lines.addAll(SodiumVertex.prologue(this.bound,
 						this.used, this.synthesized, this.inputs.separateAo()));
@@ -632,39 +632,20 @@ record Emitter(ProgramStage stage, VertexInputs inputs, List<String> bound, Alph
 	}
 
 	/**
-	 * shaderc refuses a storage image declaration that carries no format layout qualifier, unless
-	 * the image is write-only. Iris's GL bind supplies the format at bind time, so Complementary
-	 * writes {@code writeonly uniform uimage3D voxel_img} with none, and BSL writes
-	 * {@code writeonly uniform image3D lightimg0} the same way. The format is written here, in the
-	 * header: the body declaration has already been lifted, so a layout qualifier inserted into the
-	 * token stream would qualify a statement that is no longer in the shader.
-	 * <p>
-	 * The pack's own format comes first and the {@code image.} directive second, because the pack's
-	 * own is the text Iris hands its compiler: a pack that declares a volume one way and writes
-	 * another word in the shader is compiled on the word in the shader, and reading it back is the
-	 * only way to stay on the same side of that. It is also the only answer there is for a colour
-	 * target written as {@code colorimgN}, which no directive names.
-	 * <p>
-	 * The two words are not the same statement. The one in the shader is the format the SPIR-V
-	 * declares its loads and stores with; the {@code image.} directive is the format of the image
-	 * the chain binds under that name. A pack whose two disagree is asking for a reinterpretation
-	 * nothing promised it, and it is no better off under Iris, which binds the texture under its own
-	 * internal format and leaves the shader the word it wrote
-	 * ({@code samplers/IrisImages.java:39-41}), so the access format and the declared one part
-	 * company there as well. No pack of the corpus writes a word its own directive contradicts, so
-	 * this order is choosing between two spellings of one format rather than between two formats.
-	 * <p>
-	 * The memory qualifiers are written back for the same reason, and they are what carries a
-	 * declaration the pack left bare: a pack switches its images off with the setting that
-	 * switches off the program reading them, and then the {@code image.} lines go with it while the
-	 * {@code writeonly} on the declaration stays. Dropping it turned a legal declaration into one
-	 * shaderc refuses.
+	 * Preserve explicit access formats, which may differ from a texture's sampled format.
+	 * Read/write declarations without one use the image directive as a fallback. Formatless
+	 * write-only declarations stay formatless so function parameter image types still agree.
 	 */
 	private String declareOpaque(TranslatedUnit.Uniform sampler) {
 		String memory = this.memoryQualifiers.getOrDefault(sampler.name(), "");
 		String tail = (memory.isEmpty() ? "" : memory + " ") + "uniform " + sampler.declaration()
 				+ ";";
 		if (!LegacyGlsl.isImageType(sampler.type())) {
+			return tail;
+		}
+		// Formatless write-only images are legal with the enabled Vulkan write-without-format
+		// feature. Inventing a format changes their SPIR-V type relative to function parameters.
+		if (memory.contains("writeonly") && !this.imageFormats.containsKey(sampler.name())) {
 			return tail;
 		}
 

@@ -24,7 +24,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.util.Util;
 import org.jspecify.annotations.Nullable;
-import org.lwjgl.glfw.GLFW;
+import com.mojang.blaze3d.platform.InputConstants;
 
 import java.io.InputStream;
 import java.io.IOException;
@@ -507,14 +507,14 @@ public final class SettingsScreen extends Screen implements PackHost, ScreenHost
 			if (!this.optionsOpen && list != null) {
 				// Iris presses the focused row before switching, so that Tab from the list opens the
 				// settings of the pack the keyboard is on rather than of the pack that was applied.
-				list.keyPressed(new KeyEvent(GLFW.GLFW_KEY_ENTER, 0, 0));
+				list.keyPressed(new KeyEvent(InputConstants.KEY_RETURN, 0, 0));
 			}
 
 			switchView();
 			// Cleared after the rebuild put it back, so that the Tab falling through below walks the
 			// new view from its start rather than from whatever the rebuild happened to focus.
 			setFocused(null);
-		} else if (event.key() == GLFW.GLFW_KEY_F1 && this.minecraft.level != null) {
+		} else if (event.key() == InputConstants.KEY_F1 && this.minecraft.level != null) {
 			toggleHidden();
 
 			return true;
@@ -1222,7 +1222,7 @@ public final class SettingsScreen extends Screen implements PackHost, ScreenHost
 			Vitrail.logger().warn("Vitrail could not create {}", directory, e);
 		}
 
-		Util.getPlatform().openPath(directory);
+		com.mojang.blaze3d.Blaze3D.openPath(directory);
 	}
 
 	/**

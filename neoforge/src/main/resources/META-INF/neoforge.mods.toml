@@ -8,10 +8,10 @@ modId = "${mod_id}"
 version = "${mod_version}"
 displayName = "Vitrail"
 displayURL = "https://github.com/avpbynf/Vitrail-Shaders"
-logoFile = "vitrail.png"
+iconFile = "vitrail.png"
 authors = "avpbynf"
 displayTest = "IGNORE_ALL_VERSION"
-description = '''OptiFine-format shader packs, on Minecraft's native Vulkan renderer'''
+description = '''OptiFine-format shader packs on Minecraft's native Vulkan renderer. Unofficial Minecraft 26.3 NeoForge port; see docs/port-26.3-status.md for test coverage.'''
 
 # Sodium reads this block out of every mod's own metadata and turns the named mixin off.
 # features.render.world.sky hides the whole sky pass whenever the camera is in a fluid, which with a
@@ -32,23 +32,17 @@ description = '''OptiFine-format shader packs, on Minecraft's native Vulkan rend
 [[mixins]]
 config = "vitrail.mixins.json"
 
-# The engine's own mixins are in the common module and are listed above. This second config is
-# the handful that exist on this loader alone, which today is the refusal of the early loading
-# window: it names classes of NeoForge's, so it could not live where the Fabric module reads.
-[[mixins]]
-config = "vitrail-neoforge.mixins.json"
-
 [[dependencies.${mod_id}]]
 modId = "minecraft"
 type = "required"
-versionRange = "[${minecraft_version},26.3)"
+versionRange = "[${minecraft_version}]"
 ordering = "NONE"
 side = "CLIENT"
 
 [[dependencies.${mod_id}]]
 modId = "neoforge"
 type = "required"
-versionRange = "[${neoforge_min_version},26.3)"
+versionRange = "[${neoforge_min_version},26.4)"
 ordering = "NONE"
 side = "CLIENT"
 
@@ -56,6 +50,6 @@ side = "CLIENT"
 modId = "sodium"
 type = "required"
 reason = "Vitrail renders through Sodium, which owns the Vulkan command submission."
-versionRange = "[0.9,0.10)"
+versionRange = "[0.9.2,0.10)"
 ordering = "AFTER"
 side = "CLIENT"

@@ -113,6 +113,23 @@ public final class VertexPrologue {
 		return lines;
 	}
 
+	/** Modern Iris names carry the same fullscreen attributes as the legacy built-ins. */
+	public static List<String> fullscreenTail(Set<String> used, Map<String, String> synthesized) {
+		List<String> lines = new ArrayList<>();
+		globals(used, synthesized).forEach((name, type) -> {
+			String value = switch (name) {
+				case "vaPosition" -> "Position";
+				case "vaUV0" -> "UV0";
+				case "vaColor" -> "vec4(1.0)";
+				case "vaNormal" -> "vec3(0.0, 0.0, 1.0)";
+				default -> null;
+			};
+			lines.add(value == null ? declaration(name, type)
+					: "#define " + name + " " + type + "(" + value + ")");
+		});
+		return lines;
+	}
+
 	/**
 	 * The texture units above the light map, which no mesh of the game carries.
 	 * <p>

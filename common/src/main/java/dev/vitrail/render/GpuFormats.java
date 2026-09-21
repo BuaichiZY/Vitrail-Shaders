@@ -3,12 +3,12 @@ package dev.vitrail.render;
 import dev.vitrail.mixin.access.GpuDeviceAccessor;
 import dev.vitrail.pack.model.TargetFormat;
 
-import com.mojang.blaze3d.GpuFormat;
-import com.mojang.blaze3d.systems.GpuDevice;
+import com.mojang.renderpearl.api.GpuFormat;
+import com.mojang.renderpearl.api.device.GpuDevice;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.FilterMode;
-import com.mojang.blaze3d.vulkan.VulkanConst;
-import com.mojang.blaze3d.vulkan.VulkanDevice;
+import com.mojang.renderpearl.api.textures.FilterMode;
+import com.mojang.renderpearl.backend.vulkan.VulkanConst;
+import com.mojang.renderpearl.backend.vulkan.VulkanDevice;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VK10;
 import org.lwjgl.vulkan.VkFormatProperties;

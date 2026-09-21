@@ -4,23 +4,23 @@ import dev.vitrail.pack.target.ChainPlan;
 import dev.vitrail.pack.model.TargetName;
 import dev.vitrail.Vitrail;
 
-import com.mojang.blaze3d.GpuDeviceLossException;
-import com.mojang.blaze3d.GpuFormat;
-import com.mojang.blaze3d.PrimitiveTopology;
-import com.mojang.blaze3d.buffers.GpuBuffer;
-import com.mojang.blaze3d.pipeline.BindGroupLayout;
-import com.mojang.blaze3d.pipeline.BlendFunction;
-import com.mojang.blaze3d.pipeline.ColorTargetState;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.device.GpuDeviceLossException;
+import com.mojang.renderpearl.api.GpuFormat;
+import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.pipeline.BindGroupLayout;
+import com.mojang.renderpearl.api.pipeline.BlendFunction;
+import com.mojang.renderpearl.api.pipeline.ColorTargetState;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
 import com.mojang.blaze3d.pipeline.TextureTarget;
-import com.mojang.blaze3d.shaders.ShaderSource;
-import com.mojang.blaze3d.shaders.ShaderType;
-import com.mojang.blaze3d.systems.CommandEncoder;
-import com.mojang.blaze3d.systems.GpuDevice;
-import com.mojang.blaze3d.systems.RenderPass;
+import dev.vitrail.render.api.PackShaderSource;
+import com.mojang.renderpearl.api.pipeline.ShaderType;
+import com.mojang.renderpearl.api.commands.CommandEncoder;
+import com.mojang.renderpearl.api.device.GpuDevice;
+import com.mojang.renderpearl.api.commands.RenderPass;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.FilterMode;
-import com.mojang.blaze3d.textures.GpuTextureView;
+import com.mojang.renderpearl.api.textures.FilterMode;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import net.minecraft.client.renderer.BindGroupLayouts;
 import net.minecraft.resources.Identifier;
@@ -158,7 +158,7 @@ final class FeatureLayer {
 	private final ChainPlan.Attachment into;
 
 	private final RenderPipeline pipeline;
-	private final ShaderSource source;
+	private final PackShaderSource source;
 
 	private TextureTarget layer;
 	private boolean broken;
@@ -197,7 +197,7 @@ final class FeatureLayer {
 				.withVertexShader(VERTEX_ID)
 				.withFragmentShader(FRAGMENT_ID)
 				.withBindGroupLayout(BindGroupLayouts.GLOBALS)
-				.withBindGroupLayout(BindGroupLayout.builder().withSampler(SAMPLER).build())
+				.withBindGroupLayout(BindGroupLayout.builder().withUniform(SAMPLER, com.mojang.renderpearl.api.pipeline.UniformType.COMBINED_IMAGE_SAMPLER).build())
 				.withVertexBinding(0, DefaultVertexFormat.POSITION_TEX)
 				.withColorTargetState(new ColorTargetState(
 						Optional.of(BlendFunction.TRANSLUCENT_PREMULTIPLIED_ALPHA), destination,
@@ -238,7 +238,7 @@ final class FeatureLayer {
 			try {
 				// No depth of its own: the redirected draws test against the game's depth, which
 				// the override for depth keeps pointing at, so entities still hide behind walls.
-				this.layer = new TextureTarget("Vitrail features", width, height, false, FORMAT);
+				this.layer = new TextureTarget("Vitrail features", width, height, FORMAT, null);
 			} catch (GpuDeviceLossException e) {
 				throw e;
 			} catch (RuntimeException e) {
@@ -260,7 +260,7 @@ final class FeatureLayer {
 
 	/** Called every frame: a resource reload empties the pipeline cache. */
 	boolean prepare(GpuDevice device) {
-		if (device.precompilePipeline(this.pipeline, this.source).isValid()) {
+		if (PackPipelines.valid(PackPipelines.compile(device, this.pipeline, this.source))) {
 			return true;
 		}
 
@@ -295,10 +295,10 @@ final class FeatureLayer {
 		}
 
 		try (RenderPass pass = encoder.createRenderPass(() -> LABEL, into, clear)) {
-			pass.setPipeline(this.pipeline);
+			pass.setPipeline(PackPipelines.get(this.pipeline));
 			RenderSystem.bindDefaultUniforms(pass);
 			pass.setVertexBuffer(0, quad.slice());
-			pass.bindTexture(SAMPLER, this.layer.getColorTextureView(),
+			pass.setUniform(SAMPLER, this.layer.getColorTextureView(),
 					RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
 			pass.draw(VERTICES, 1, 0, 0);
 		}

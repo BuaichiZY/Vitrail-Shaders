@@ -12,7 +12,7 @@ import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import org.jspecify.annotations.Nullable;
-import org.lwjgl.glfw.GLFW;
+import com.mojang.blaze3d.platform.InputConstants;
 
 import java.util.Optional;
 
@@ -112,7 +112,7 @@ public final class LinkWidget extends PageWidget {
 
 	@Override
 	public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-		return event.button() == GLFW.GLFW_MOUSE_BUTTON_1
+		return event.button() == InputConstants.MOUSE_BUTTON_LEFT
 				? open()
 				: super.mouseClicked(event, doubleClick);
 	}

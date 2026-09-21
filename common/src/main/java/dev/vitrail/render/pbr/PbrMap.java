@@ -103,7 +103,7 @@ public enum PbrMap {
 	}
 
 	/** What is appended to a sprite's own path to find this map beside it. */
-	String suffix() {
+	public String suffix() {
 		return this.suffix;
 	}
 

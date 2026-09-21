@@ -3,7 +3,8 @@ package dev.vitrail.render;
 import dev.vitrail.render.storage.StorageBuffers;
 import dev.vitrail.render.storage.StorageImages;
 
-import com.mojang.blaze3d.vulkan.VulkanBindGroupLayout;
+import com.mojang.renderpearl.api.pipeline.BindGroupLayout;
+import com.mojang.renderpearl.api.pipeline.UniformType;
 
 /**
  * The bind group entry a descriptor push is writing, with what the pack's storage answers for
@@ -23,7 +24,7 @@ public final class PushedDescriptor {
 	private static final ThreadLocal<PushedDescriptor> CURRENT =
 			ThreadLocal.withInitial(PushedDescriptor::new);
 
-	private VulkanBindGroupLayout.Entry entry;
+	private BindGroupLayout.UniformDescription entry;
 	private StorageImages.Bound image;
 	private StorageBuffers.Bound buffer;
 
@@ -31,10 +32,10 @@ public final class PushedDescriptor {
 	}
 
 	/** The entry the push is about to write, and the pack's answers for its name. */
-	public static void begin(VulkanBindGroupLayout.Entry entry) {
+	public static void begin(BindGroupLayout.UniformDescription entry, String imageFormat) {
 		PushedDescriptor current = CURRENT.get();
 		current.entry = entry;
-		current.image = StorageImages.bound(entry.name());
+		current.image = StorageImages.bound(entry.name(), imageFormat);
 		current.buffer = StorageBuffers.bound(entry.name());
 	}
 
@@ -43,11 +44,17 @@ public final class PushedDescriptor {
 	}
 
 	/** The entry being written, or null before the first entry of the thread. */
-	public VulkanBindGroupLayout.Entry entry() {
+	public BindGroupLayout.UniformDescription entry() {
 		return this.entry;
 	}
 
-	/** The pack image under the entry's name, or null where the pack declares none. */
+	/** A framebuffer image keeps the view bound by its pass, with a storage descriptor. */
+	public boolean colourImage() {
+		return this.entry != null
+				&& dev.vitrail.pack.model.TargetName.imageIndex(this.entry.name()).isPresent();
+	}
+
+	/** The custom pack image, or null where the pack declares none. */
 	public StorageImages.Bound image() {
 		return this.image;
 	}

@@ -2,8 +2,8 @@ package dev.vitrail.render;
 
 import dev.vitrail.glsl.DistantVertex;
 
-import com.mojang.blaze3d.GpuFormat;
-import com.mojang.blaze3d.vertex.VertexFormat;
+import com.mojang.renderpearl.api.GpuFormat;
+import com.mojang.renderpearl.api.vertex.VertexFormat;
 
 import java.util.List;
 import java.util.Map;

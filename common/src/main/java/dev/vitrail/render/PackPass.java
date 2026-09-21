@@ -14,26 +14,26 @@ import dev.vitrail.uniform.TextSink;
 import dev.vitrail.uniform.WorldState;
 import dev.vitrail.Vitrail;
 
-import com.mojang.blaze3d.GpuFormat;
-import com.mojang.blaze3d.PrimitiveTopology;
-import com.mojang.blaze3d.buffers.GpuBuffer;
-import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import com.mojang.renderpearl.api.GpuFormat;
+import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.buffers.Std140Builder;
-import com.mojang.blaze3d.pipeline.BindGroupLayout;
-import com.mojang.blaze3d.pipeline.ColorTargetState;
-import com.mojang.blaze3d.pipeline.CompiledRenderPipeline;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.shaders.ShaderSource;
-import com.mojang.blaze3d.shaders.ShaderType;
-import com.mojang.blaze3d.shaders.UniformType;
-import com.mojang.blaze3d.systems.CommandEncoder;
-import com.mojang.blaze3d.systems.GpuDevice;
-import com.mojang.blaze3d.systems.RenderPass;
-import com.mojang.blaze3d.systems.RenderPassDescriptor;
+import com.mojang.renderpearl.api.pipeline.BindGroupLayout;
+import com.mojang.renderpearl.api.pipeline.ColorTargetState;
+import com.mojang.renderpearl.api.pipeline.CompiledRenderPipeline;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import dev.vitrail.render.api.PackShaderSource;
+import com.mojang.renderpearl.api.pipeline.ShaderType;
+import com.mojang.renderpearl.api.pipeline.UniformType;
+import com.mojang.renderpearl.api.commands.CommandEncoder;
+import com.mojang.renderpearl.api.device.GpuDevice;
+import com.mojang.renderpearl.api.commands.RenderPass;
+import com.mojang.renderpearl.api.commands.RenderPassDescriptor;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.FilterMode;
-import com.mojang.blaze3d.textures.GpuSampler;
-import com.mojang.blaze3d.textures.GpuTextureView;
+import com.mojang.renderpearl.api.textures.FilterMode;
+import com.mojang.renderpearl.api.textures.GpuSampler;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import net.minecraft.client.renderer.BindGroupLayouts;
 import net.minecraft.resources.Identifier;
@@ -149,7 +149,7 @@ final class PackPass {
 	private final TargetSchedule.Bound step;
 
 	private final RenderPipeline pipeline;
-	private final ShaderSource source;
+	private final PackShaderSource source;
 	private final Supplier<String> label;
 	private final List<String> notes = new ArrayList<>();
 	private final List<GpuTextureView> attachedViews = new ArrayList<>();
@@ -249,7 +249,7 @@ final class PackPass {
 
 		BindGroupLayout.Builder bindings = BindGroupLayout.builder()
 				.withUniform(UNIFORM_BLOCK, UniformType.UNIFORM_BUFFER);
-		this.samplers.forEach(bindings::withSampler);
+		this.samplers.forEach(name -> bindings.withUniform(name, UniformType.COMBINED_IMAGE_SAMPLER));
 		this.storage.forEach(name -> bindings.withUniform(name, UniformType.UNIFORM_BUFFER));
 
 		RenderPipeline.Builder builder = RenderPipeline.builder()
@@ -298,6 +298,7 @@ final class PackPass {
 		// Filed against the pipeline and not the program, because the pipeline is what the
 		// descriptor walk can see when it has to answer for a name.
 		ShadowCompare.note(this.pipeline, this.path, loaded);
+		ImageAccessFormats.note(this.pipeline, loaded);
 		// A full screen program shipping a geometry stage on a device that cannot run one: the
 		// compile that follows refuses the pipeline over the varyings that stage was to hand on,
 		// wherever it renames them, and the chain draws the pass without it wherever it does not.
@@ -321,7 +322,7 @@ final class PackPass {
 	 * rebuilt from the game's own shader sources, which do not contain a line of this pack.
 	 */
 	CompiledRenderPipeline compile(GpuDevice device) {
-		return device.precompilePipeline(this.pipeline, this.source);
+		return PackPipelines.compile(device, this.pipeline, this.source);
 	}
 
 	/** {@code world0/composite4}, which is what a log line and a failure name it by. */
@@ -531,7 +532,7 @@ final class PackPass {
 			this.attachedViews.add(view(targets, attachment));
 		}
 
-		RenderPassDescriptor descriptor = RenderPassDescriptor.create(this.label);
+		RenderPassDescriptor.Builder descriptor = RenderPassDescriptor.builder(this.label);
 		for (GpuTextureView view : this.attachedViews) {
 			descriptor.withColorAttachment(view, targets.takeClear(view));
 		}
@@ -548,7 +549,7 @@ final class PackPass {
 			targets.flushPending(encoder);
 		}
 
-		try (RenderPass pass = encoder.createRenderPass(descriptor)) {
+		try (RenderPass pass = encoder.createRenderPass(descriptor.build())) {
 			record(pass, targets, depthView, distantView, quad, uniforms);
 		}
 	}
@@ -588,7 +589,7 @@ final class PackPass {
 
 	private void record(RenderPass pass, ColorTargets targets, GpuTextureView depthView,
 			GpuTextureView distantView, GpuBuffer quad, GpuBufferSlice uniforms) {
-		pass.setPipeline(this.pipeline);
+		pass.setPipeline(PackPipelines.get(this.pipeline));
 		RenderSystem.bindDefaultUniforms(pass);
 		pass.setUniform(UNIFORM_BLOCK, uniforms);
 		StorageBuffers.bind(pass, this.storage);
@@ -623,12 +624,14 @@ final class PackPass {
 
 			// Resolved once for the view and the chain below, which used to be two walks of the
 			// same map for one name.
-			TargetSurface surface = binding.kind() == SamplerPlan.Kind.COLORTEX
+			TargetSurface surface = (binding.kind() == SamplerPlan.Kind.COLORTEX
+					|| binding.kind() == SamplerPlan.Kind.COLOUR_IMAGE)
 					? targets.surface(binding.index(), binding.side())
 					: null;
 
 			GpuTextureView bound = supplied != null ? supplied : switch (binding.kind()) {
 				case COLORTEX -> surface == null ? null : surface.view();
+				case COLOUR_IMAGE -> targets.storageView(binding.index(), binding.side());
 				// White where no image is there, and white is the far plane rather than a
 				// placeholder: what a depth lookup reads is now an image already in the pack's own
 				// window, where one is the far plane, and the whole world would otherwise be drawn
@@ -750,7 +753,7 @@ final class PackPass {
 			// it produces a field of stripes that reads as an effect nobody asked for, and it takes
 			// whatever the pack built out of it down with it. A texture of the pack's own says for
 			// itself, in the .mcmeta beside the file.
-			pass.bindTexture(sampler, bound == null ? targets.black() : bound,
+			pass.setUniform(sampler, bound == null ? targets.black() : bound,
 					supplied != null
 							? sampler(source.repeat(), filter, false)
 							: sampler(binding.kind(), filter, mipmaps));

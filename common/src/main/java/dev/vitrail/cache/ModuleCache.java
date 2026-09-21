@@ -1,8 +1,9 @@
 package dev.vitrail.cache;
 
-import com.mojang.blaze3d.vulkan.glsl.IntermediaryShaderModule;
+import com.mojang.renderpearl.backend.api.SpvModule;
+import com.mojang.renderpearl.api.pipeline.ShaderType;
+import dev.vitrail.render.PackSpvModule;
 import dev.vitrail.glsl.LocalZeroes;
-import dev.vitrail.mixin.access.IntermediaryShaderModuleAccessor;
 import dev.vitrail.render.PackChain;
 import dev.vitrail.render.PackNames;
 import dev.vitrail.render.RawLocals;
@@ -19,8 +20,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
@@ -43,80 +42,9 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
 
 /**
- * Keeps the whole of what the game's compiler makes of each shader unit, on disk, so a second load
- * of the same pack pays for neither the compile nor the reading of what came out of it.
- * <p>
- * Loading a pack costs seconds, and a clock around the two halves of that number said where they
- * go: shaderc turning GLSL into SPIR-V, and the SPIRV-Cross reflection walking the result to find
- * out what it binds. Both are pure functions of the same input, so both are cached by that input,
- * and a served unit costs a file read and no native work at all. Caching only the first half was
- * built and measured first, and it left the second half standing, which is why the reflection is
- * stored beside the bytes it read rather than replayed over them.
- * <p>
- * <strong>The key IS the input, hashed</strong>, and nothing else: the exact text handed to the
- * compiler, the stage it is compiled for, and everything that decides what that text turns into,
- * which is the mod's version and, on a development build, the commit behind it, the game's, the
- * loader with its own version, and the LWJGL build whose bundled shaderc and SPIRV-Cross do the
- * work. Nothing is keyed on a pack name, a file path or the debug name the module carries, so
- * there is no invalidation to get wrong and none is written. An edited shader, a moved pack
- * setting, a translator that emits one word differently, a loader that patches the compiler: each
- * is a different key, and the blob under the old one is never asked for again.
- * <p>
- * <strong>The debug name stays out of the key on purpose.</strong> The game's pipeline cache is
- * keyed on the identifier and never on the text, so this engine puts the load number in that name
- * ({@code pack/<load>/...}): two chains must not share an identifier when their GLSL differs
- * ({@code docs/internals/game-graphics-api.md}). The disk key already carries the text, so hashing
- * the load number as well would make every Apply, every R and every portal a miss of identical
- * GLSL. F3+T does not bump the load and already hit; a pack reload now hits too. The live name is
- * still handed to {@link #lookup} so the rebuilt module carries the identifier this chain's
- * pipelines will ask for. Two texts colliding under one blob would need a SHA-256 collision of
- * the source, which is not the trap the load number exists to prevent.
- * <p>
- * <strong>What is stored is the module as its maker handed it over</strong>, at the one instant at
- * which it is finished and nothing has yet bent it to a pipeline: the bytes, the uniform buffers
- * and samplers the reflection found, the inputs and outputs it numbered, and the storage images and
- * buffers this engine appends behind them because the game never asks for those. {@code rebind}
- * comes later and rewrites the bytes for one pipeline's bindings, so a module is stored before any
- * caller has had it, and every hit is an allocation of its own.
- * <p>
- * A wrong blob is worse than a slow load: it is a picture that is wrong, or a lost device, with
- * nothing on screen pointing back here. A length and the SPIR-V magic word are not enough on their
- * own: a truncation on a four byte boundary keeps the magic word and a length both checks accept,
- * and what it then reaches is a native parser that no Java catch stands in front of. So every file
- * carries a digest of its own bytes behind them, and a blob its digest does not answer for is never
- * handed on. Absent, truncated, corrupt, unreadable, or of a shape this build cannot rebuild a
- * module from: every one of them is a MISS rather than an error, and ends in the compiler running
- * exactly as it did before this class existed.
- * <p>
- * A write lands through a neighbouring file and a move, so a process killed halfway through
- * leaves a neighbour rather than a half module under a whole name. The move is atomic where the
- * file system offers it and a plain replace where it does not, and nothing here is forced to the
- * platter, so what answers for a file after a power cut is the digest behind it and not the move.
- * <p>
- * <strong>The disk is bounded</strong>, at half a gigabyte by default, and bounded per edition:
- * the files sit under a directory named for the mod and game versions, and for a development
- * build the commit as well, and a directory named for another edition is deleted when this one
- * opens. Without that an update would fill a fresh set of keys on top of the set it had just made
- * unreachable, and two packs plus one update would go over the ceiling with nothing in the way. A
- * build carrying a commit keeps one neighbour and so holds two of those ceilings rather than one,
- * and {@link #dropOtherEditions} says which neighbour and why. The Sodium slider writes the number,
- * and a store already over it is swept at once. Past the ceiling the units nothing has asked for
- * lately go first, down to three quarters of it so that the sweep is not paid again at the very
- * next write.
- * <p>
- * <strong>The folder's name is narrower than the key</strong>, and deliberately: the key also
- * carries the loader, its version and the LWJGL build, so a NeoForge or an LWJGL bump makes every
- * blob unreachable without moving the folder, and what those blobs then cost is space until a
- * sweep collects them. Naming the folder after all five would sweep the whole store on a loader
- * bump, which is the same space spent on the same day for no reading. What the folder does carry
- * beyond the two versions is the commit, and only on a development build: without it, two builds
- * declaring one version would share the folder AND the keys, which is every build made between
- * two releases, and a translator changed since yesterday would be served yesterday's modules with
- * nothing saying so. A release build carries no commit, because a player's store is worth keeping
- * across every jar of one version and nothing but a release changes what those jars compile.
- * <p>
- * {@code -Dvitrail.moduleCache=false} turns the whole thing off, and the line is still printed, so
- * one jar answers the question in both directions.
+ * Bounded, checksum-protected disk cache of patched SPIR-V before pipeline-specific rebinding.
+ * RenderPearl owns native reflection contexts, so reflection is rebuilt lazily from each private
+ * byte buffer instead of persisting the removed 26.2 reflection record classes.
  */
 public final class ModuleCache {
 
@@ -177,7 +105,7 @@ public final class ModuleCache {
 	 * for a module can move without this layout moving, so the pass carries a version of its own
 	 * that {@link #keyOf} hashes beside this.
 	 */
-	private static final String FORMAT = "vitrail-module-3";
+	private static final String FORMAT = "vitrail-renderpearl-module-5";
 
 	private static final String FOLDER = "modules";
 
@@ -331,7 +259,7 @@ public final class ModuleCache {
 	 * @param stage  vertex, fragment, or the compute recipe token, which decides the whole compile
 	 */
 	public static @Nullable String keyOf(String source, String stage) {
-		if (directory() == null || !ModuleShape.available()) {
+		if (directory() == null) {
 			return null;
 		}
 
@@ -375,7 +303,7 @@ public final class ModuleCache {
 	 * {@code close}, and holding bytes of its own so that the {@code rebind} that follows rewrites
 	 * nobody else's.
 	 */
-	public static @Nullable IntermediaryShaderModule lookup(@Nullable String key, String filename) {
+	public static @Nullable SpvModule lookup(@Nullable String key, String filename) {
 		Path root = directory();
 		if (key == null || root == null) {
 			return null;
@@ -410,7 +338,7 @@ public final class ModuleCache {
 			return null;
 		}
 
-		IntermediaryShaderModule module = rebuild(filename, raw, length);
+		SpvModule module = rebuild(filename, raw, length);
 		if (module == null) {
 			return null;
 		}
@@ -446,68 +374,32 @@ public final class ModuleCache {
 	 * less pass over bytes that are all written anyway. It is freed here, and only here, when the
 	 * build gives up part way through: nothing else has been handed it yet.
 	 */
-	private static @Nullable IntermediaryShaderModule rebuild(String filename, byte[] raw,
-			int length) {
+	private static @Nullable SpvModule rebuild(String filename, byte[] raw, int length) {
 		ByteBuffer spirv = null;
 		try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(raw, 0, length))) {
-			int size = in.readInt();
-			if (size < SHORTEST || size % 4 != 0 || size > length) {
-				throw new IOException("a stored module claims " + size + " bytes of SPIR-V");
+			int stage = in.readInt();
+			if (stage < 0 || stage >= ShaderType.values().length) {
+				throw new IOException("Unknown cached shader type");
 			}
-
+			int size = in.readInt();
+			if (size < SHORTEST || size % 4 != 0 || size != length - 8) {
+				throw new IOException("Invalid SPIR-V payload length");
+			}
 			byte[] words = new byte[size];
 			in.readFully(words);
 			if (ByteBuffer.wrap(words).order(ByteOrder.nativeOrder()).getInt(0) != MAGIC) {
-				throw new IOException("a stored module does not open on the SPIR-V magic word");
+				throw new IOException("Invalid SPIR-V magic");
 			}
-
-			List<Object> uniformBuffers = new ArrayList<>();
-			for (int left = count(in); left > 0; left--) {
-				uniformBuffers.add(ModuleShape.uniformBuffer(in.readUTF(), in.readInt()));
-			}
-
-			List<Object> samplers = new ArrayList<>();
-			for (int left = count(in); left > 0; left--) {
-				samplers.add(ModuleShape.sampler(in.readUTF(), in.readInt(), in.readInt()));
-			}
-
-			List<Object> outputs = new ArrayList<>();
-			for (int left = count(in); left > 0; left--) {
-				outputs.add(ModuleShape.variable(in.readUTF(), in.readInt()));
-			}
-
-			List<Object> inputs = new ArrayList<>();
-			for (int left = count(in); left > 0; left--) {
-				inputs.add(ModuleShape.variable(in.readUTF(), in.readInt()));
-			}
-
 			spirv = MemoryUtil.memAlloc(size);
-			spirv.put(words);
-			spirv.flip();
-
-			return ModuleShape.module(filename, spirv, uniformBuffers, samplers, outputs, inputs);
-		} catch (IOException | ReflectiveOperationException | RuntimeException
-				| OutOfMemoryError e) {
-			// The Error is in the list on purpose. Everything else in here is a miss, and a length
-			// this could not allocate for would otherwise be the one shape of damaged file that
-			// takes the pack load down instead.
+			spirv.put(words).flip();
+			return new PackSpvModule(filename, spirv, ShaderType.values()[stage]);
+		} catch (IOException | RuntimeException | OutOfMemoryError e) {
 			if (spirv != null) {
 				MemoryUtil.memFree(spirv);
 			}
-
 			sayAboutReading("a stored module could not be rebuilt (" + e + ")");
-
 			return null;
 		}
-	}
-
-	private static int count(DataInputStream in) throws IOException {
-		int size = in.readInt();
-		if (size < 0 || size > MOST_ENTRIES) {
-			throw new IOException("a stored module claims " + size + " entries of one kind");
-		}
-
-		return size;
 	}
 
 	/**
@@ -538,16 +430,16 @@ public final class ModuleCache {
 	 * Called with the module the caller is about to receive and before anything has been done to
 	 * it, which is the one instant at which it is both finished and untouched.
 	 */
-	public static void store(@Nullable String key, IntermediaryShaderModule module) {
+	public static void store(@Nullable String key, SpvModule module) {
 		Path root = directory();
-		if (key == null || root == null || module.spirv() == null) {
+		if (key == null || root == null || module.spv() == null) {
 			return;
 		}
 
 		byte[] raw;
 		try {
 			raw = describe(module);
-		} catch (IOException | ReflectiveOperationException | RuntimeException e) {
+		} catch (IOException | RuntimeException e) {
 			sayAboutStoring("a module could not be written down (" + e + ")");
 
 			return;
@@ -582,48 +474,17 @@ public final class ModuleCache {
 	}
 
 	/** Everything a module is, in the order {@link #rebuild} reads it back. */
-	private static byte[] describe(IntermediaryShaderModule module)
-			throws IOException, ReflectiveOperationException {
-		IntermediaryShaderModuleAccessor access = (IntermediaryShaderModuleAccessor) (Object) module;
+	private static byte[] describe(SpvModule module) throws IOException {
 		ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-
 		try (DataOutputStream out = new DataOutputStream(bytes)) {
-			// A view of its own, so the caller's position and limit are left where they were.
-			ByteBuffer view = module.spirv().duplicate();
+			ByteBuffer view = module.spv().duplicate();
 			byte[] words = new byte[view.remaining()];
 			view.get(words);
+			out.writeInt(module.type().ordinal());
 			out.writeInt(words.length);
 			out.write(words);
-
-			List<?> uniformBuffers = access.vitrail$uniformBuffers();
-			out.writeInt(uniformBuffers.size());
-			for (Object buffer : uniformBuffers) {
-				out.writeUTF(ModuleShape.uniformBufferName(buffer));
-				out.writeInt(ModuleShape.uniformBufferBinding(buffer));
-			}
-
-			List<?> samplers = access.vitrail$samplers();
-			out.writeInt(samplers.size());
-			for (Object sampler : samplers) {
-				out.writeUTF(ModuleShape.samplerName(sampler));
-				out.writeInt(ModuleShape.samplerBinding(sampler));
-				out.writeInt(ModuleShape.samplerDimensions(sampler));
-			}
-
-			writeVariables(out, access.vitrail$outputs());
-			writeVariables(out, access.vitrail$inputs());
 		}
-
 		return bytes.toByteArray();
-	}
-
-	private static void writeVariables(DataOutputStream out, List<?> variables)
-			throws IOException, ReflectiveOperationException {
-		out.writeInt(variables.size());
-		for (Object variable : variables) {
-			out.writeUTF(ModuleShape.variableName(variable));
-			out.writeInt(ModuleShape.variableLocation(variable));
-		}
 	}
 
 	/**
@@ -1003,170 +864,4 @@ public final class ModuleCache {
 	private record Unit(Path path, long stamp, long size) {
 	}
 
-	/**
-	 * The three record types a module is made of, reached by reflection because they are package
-	 * private and this package is not theirs.
-	 * <p>
-	 * Naming them is what a mixin accessor cannot do either, which is why the lists it hands back
-	 * are raw: an interface of ours declaring {@code List<SpvSampler>} would not compile, and a
-	 * class of ours in their package would not boot. So an entry is read and written one component
-	 * at a time, and the module's own canonical constructor is called the same way, its parameter
-	 * types being those three.
-	 * <p>
-	 * <strong>A build that cannot find them serves nothing and stores nothing</strong>, rather than
-	 * failing at the first pack: a game update that moves one of these leaves the cache silent and
-	 * the compiler doing exactly what it did before.
-	 */
-	private static final class ModuleShape {
-
-		private static final @Nullable Constructor<?> UNIFORM_BUFFER;
-		private static final @Nullable Constructor<?> SAMPLER;
-		private static final @Nullable Constructor<?> VARIABLE;
-		private static final @Nullable Constructor<?> MODULE;
-		private static final @Nullable Method UNIFORM_BUFFER_NAME;
-		private static final @Nullable Method UNIFORM_BUFFER_BINDING;
-		private static final @Nullable Method SAMPLER_NAME;
-		private static final @Nullable Method SAMPLER_BINDING;
-		private static final @Nullable Method SAMPLER_DIMENSIONS;
-		private static final @Nullable Method VARIABLE_NAME;
-		private static final @Nullable Method VARIABLE_LOCATION;
-
-		static {
-			Shape shape;
-			try {
-				shape = find();
-			} catch (ReflectiveOperationException | RuntimeException e) {
-				Vitrail.logger().warn("No module cache this run, because a shader module is not the "
-						+ "shape this build expects: {}", e.toString());
-				shape = new Shape(null, null, null, null, null, null, null, null, null, null, null);
-			}
-
-			UNIFORM_BUFFER = shape.uniformBuffer();
-			SAMPLER = shape.sampler();
-			VARIABLE = shape.variable();
-			MODULE = shape.module();
-			UNIFORM_BUFFER_NAME = shape.uniformBufferName();
-			UNIFORM_BUFFER_BINDING = shape.uniformBufferBinding();
-			SAMPLER_NAME = shape.samplerName();
-			SAMPLER_BINDING = shape.samplerBinding();
-			SAMPLER_DIMENSIONS = shape.samplerDimensions();
-			VARIABLE_NAME = shape.variableName();
-			VARIABLE_LOCATION = shape.variableLocation();
-		}
-
-		private ModuleShape() {
-		}
-
-		/** Everything reached in one go, so that a half found shape can never be a usable one. */
-		private record Shape(@Nullable Constructor<?> uniformBuffer, @Nullable Constructor<?> sampler,
-				@Nullable Constructor<?> variable, @Nullable Constructor<?> module,
-				@Nullable Method uniformBufferName, @Nullable Method uniformBufferBinding,
-				@Nullable Method samplerName, @Nullable Method samplerBinding,
-				@Nullable Method samplerDimensions, @Nullable Method variableName,
-				@Nullable Method variableLocation) {
-		}
-
-		private static Shape find() throws ReflectiveOperationException {
-			Class<?> buffers = Class.forName("com.mojang.blaze3d.vulkan.glsl.SpvUniformBuffer");
-			Class<?> samplers = Class.forName("com.mojang.blaze3d.vulkan.glsl.SpvSampler");
-			Class<?> variables = Class.forName("com.mojang.blaze3d.vulkan.glsl.SpvVariable");
-
-			return new Shape(
-					make(buffers, String.class, int.class),
-					make(samplers, String.class, int.class, int.class),
-					make(variables, String.class, int.class),
-					make(IntermediaryShaderModule.class, String.class, ByteBuffer.class, List.class,
-							List.class, List.class, List.class),
-					open(buffers, "name"), open(buffers, "bindingOffset"),
-					open(samplers, "name"), open(samplers, "bindingOffset"),
-					open(samplers, "dimensions"),
-					open(variables, "name"), open(variables, "locationOffset"));
-		}
-
-		private static Constructor<?> make(Class<?> owner, Class<?>... parameters)
-				throws ReflectiveOperationException {
-			Constructor<?> constructor = owner.getDeclaredConstructor(parameters);
-			constructor.setAccessible(true);
-
-			return constructor;
-		}
-
-		private static Method open(Class<?> owner, String component)
-				throws ReflectiveOperationException {
-			Method method = owner.getDeclaredMethod(component);
-			method.setAccessible(true);
-
-			return method;
-		}
-
-		static boolean available() {
-			return MODULE != null;
-		}
-
-		static Object uniformBuffer(String name, int bindingOffset)
-				throws ReflectiveOperationException {
-			return require(UNIFORM_BUFFER).newInstance(name, bindingOffset);
-		}
-
-		static Object sampler(String name, int bindingOffset, int dimensions)
-				throws ReflectiveOperationException {
-			return require(SAMPLER).newInstance(name, bindingOffset, dimensions);
-		}
-
-		static Object variable(String name, int locationOffset) throws ReflectiveOperationException {
-			return require(VARIABLE).newInstance(name, locationOffset);
-		}
-
-		static IntermediaryShaderModule module(String name, ByteBuffer spirv,
-				List<?> uniformBuffers, List<?> samplers, List<?> outputs, List<?> inputs)
-				throws ReflectiveOperationException {
-			return (IntermediaryShaderModule) require(MODULE)
-					.newInstance(name, spirv, uniformBuffers, samplers, outputs, inputs);
-		}
-
-		static String uniformBufferName(Object entry) throws ReflectiveOperationException {
-			return (String) require(UNIFORM_BUFFER_NAME).invoke(entry);
-		}
-
-		static int uniformBufferBinding(Object entry) throws ReflectiveOperationException {
-			return (Integer) require(UNIFORM_BUFFER_BINDING).invoke(entry);
-		}
-
-		static String samplerName(Object entry) throws ReflectiveOperationException {
-			return (String) require(SAMPLER_NAME).invoke(entry);
-		}
-
-		static int samplerBinding(Object entry) throws ReflectiveOperationException {
-			return (Integer) require(SAMPLER_BINDING).invoke(entry);
-		}
-
-		static int samplerDimensions(Object entry) throws ReflectiveOperationException {
-			return (Integer) require(SAMPLER_DIMENSIONS).invoke(entry);
-		}
-
-		static String variableName(Object entry) throws ReflectiveOperationException {
-			return (String) require(VARIABLE_NAME).invoke(entry);
-		}
-
-		static int variableLocation(Object entry) throws ReflectiveOperationException {
-			return (Integer) require(VARIABLE_LOCATION).invoke(entry);
-		}
-
-		private static Constructor<?> require(@Nullable Constructor<?> constructor)
-				throws ReflectiveOperationException {
-			if (constructor == null) {
-				throw new NoSuchMethodException("a shader module record is not where it was");
-			}
-
-			return constructor;
-		}
-
-		private static Method require(@Nullable Method method) throws ReflectiveOperationException {
-			if (method == null) {
-				throw new NoSuchMethodException("a shader module component is not where it was");
-			}
-
-			return method;
-		}
-	}
 }

@@ -374,6 +374,8 @@ public final class TranslationCache {
 
 		MessageDigest digest = sha256();
 		feed(digest, TranslatedProgramCodec.FORMAT);
+		feed(digest, "renderpearl-26.3-dynamic-transforms-1");
+		feed(digest, "pack-compat-formatless-writes-4");
 		// The switches of the translator itself, which are the one input that is not an argument:
 		// the trig substitution and the shadow comparison both change what it emits and neither
 		// says so in the text it was handed.

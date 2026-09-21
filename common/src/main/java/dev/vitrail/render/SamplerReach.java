@@ -1,8 +1,7 @@
 package dev.vitrail.render;
 
-import com.mojang.blaze3d.vulkan.glsl.IntermediaryShaderModule;
+import com.mojang.renderpearl.backend.api.SpvModule;
 import dev.vitrail.Vitrail;
-import dev.vitrail.mixin.access.IntermediaryShaderModuleAccessor;
 import org.lwjgl.PointerBuffer;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.util.spvc.Spvc;
@@ -100,48 +99,26 @@ public final class SamplerReach {
 	 * Called on the module the reflection has just built, before anything has read its tables.
 	 *
 	 * @param filename the debug name the compile was given, which says whose module it is
-	 * @param module   the module to narrow, whose lists are the ones the reflection filled
+	 * @param spirv the module bytes used to find active resources
+	 * @param descriptors the descriptors reflected by RenderPearl
+	 * @return descriptors that can be reached by the entry point
 	 */
-	@SuppressWarnings({"rawtypes", "unchecked"})
-	public static void narrow(String filename, IntermediaryShaderModule module) {
-		if (DECLARED || module == null || module.spirv() == null || !RawLocals.ours(filename)) {
-			return;
+	public static List<SpvModule.Reflection.Descriptor> narrow(String filename, ByteBuffer spirv,
+			List<SpvModule.Reflection.Descriptor> descriptors) {
+		if (DECLARED || !RawLocals.ours(filename)) {
+			return descriptors;
 		}
-
 		WALKED.incrementAndGet();
-		Set<String> unreached = unreached(module.spirv());
-		if (unreached.isEmpty()) {
-			return;
-		}
-
-		List samplers = ((IntermediaryShaderModuleAccessor) (Object) module).vitrail$samplers();
-		int before = samplers.size();
-		try {
-			// By NAME and not by rank. The two readings list the module's resources in the same
-			// order today, but a rank is only right for as long as that holds and for as long as
-			// nothing has been appended to the list in between, where a name is right either way.
-			samplers.removeIf(sampler -> unreached.contains(ComputeShader.samplerName(sampler)));
-		} catch (RuntimeException e) {
-			// A narrowing is not worth a pack. Reading that name is reflection over a record of
-			// the game's: not over a shape this build never found, which ComputeShader's own
-			// initialiser refuses long before anything compiles, but the invoke can still throw,
-			// and thrown from here it would come out of the compiler's own method and take every
-			// pack on the machine down rather than cost one layout its density. Said at WARN,
-			// because a load that lost this quietly is a load that binds allocated sets on Apple
-			// hardware, or is refused there, with nothing in the log to explain why.
-			Vitrail.logger().warn("Could not read a module's sampler names, so its layout keeps a "
-					+ "binding for every declared sampler: on Apple hardware a stage numbered past "
-					+ "Metal's sixteen slots needs an allocated set, and is refused where no argument "
-					+ "buffer takes it", e);
-
-			return;
-		}
-
-		int gone = before - samplers.size();
+		Set<String> unused = unreached(spirv);
+		List<SpvModule.Reflection.Descriptor> kept = descriptors.stream()
+				.filter(d -> d.resourceType() != SAMPLED_IMAGE || !unused.contains(d.name()))
+				.toList();
+		int gone = descriptors.size() - kept.size();
 		if (gone > 0) {
 			NARROWED.incrementAndGet();
 			DROPPED.addAndGet(gone);
 		}
+		return kept;
 	}
 
 	/**

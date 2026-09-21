@@ -3,21 +3,21 @@ package dev.vitrail.render;
 import dev.vitrail.uniform.ClipSpace;
 import dev.vitrail.Vitrail;
 
-import com.mojang.blaze3d.GpuDeviceLossException;
-import com.mojang.blaze3d.GpuFormat;
-import com.mojang.blaze3d.PrimitiveTopology;
-import com.mojang.blaze3d.buffers.GpuBuffer;
-import com.mojang.blaze3d.pipeline.BindGroupLayout;
-import com.mojang.blaze3d.pipeline.ColorTargetState;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.shaders.ShaderSource;
-import com.mojang.blaze3d.shaders.ShaderType;
-import com.mojang.blaze3d.systems.CommandEncoder;
-import com.mojang.blaze3d.systems.GpuDevice;
-import com.mojang.blaze3d.systems.RenderPass;
+import com.mojang.renderpearl.api.device.GpuDeviceLossException;
+import com.mojang.renderpearl.api.GpuFormat;
+import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.pipeline.BindGroupLayout;
+import com.mojang.renderpearl.api.pipeline.ColorTargetState;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import dev.vitrail.render.api.PackShaderSource;
+import com.mojang.renderpearl.api.pipeline.ShaderType;
+import com.mojang.renderpearl.api.commands.CommandEncoder;
+import com.mojang.renderpearl.api.device.GpuDevice;
+import com.mojang.renderpearl.api.commands.RenderPass;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.FilterMode;
-import com.mojang.blaze3d.textures.GpuTextureView;
+import com.mojang.renderpearl.api.textures.FilterMode;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import net.minecraft.client.renderer.BindGroupLayouts;
 import net.minecraft.resources.Identifier;
@@ -234,7 +234,7 @@ final class PackDepth {
 			}
 			""", ClipSpace.REVERSED.z, ClipSpace.REVERSED.w);
 
-	private static final ShaderSource SOURCE = (id, type) -> {
+	private static final PackShaderSource SOURCE = (id, type) -> {
 		if (type == ShaderType.FRAGMENT) {
 			if (DISTANT_FRAGMENT_ID.equals(id)) {
 				return DISTANT_FRAGMENT;
@@ -887,13 +887,13 @@ final class PackDepth {
 		// Loaded rather than cleared: the draw covers the image whole, so a clear would be one more
 		// write of the same texels.
 		try (RenderPass pass = encoder.createRenderPass(() -> LABEL, into.view(), Optional.empty())) {
-			pass.setPipeline(compiled);
+			pass.setPipeline(PackPipelines.get(compiled));
 			RenderSystem.bindDefaultUniforms(pass);
 			pass.setVertexBuffer(0, quad.slice());
 			// NEAREST, and it is what makes this a rewrite of the value and not of the image: one
 			// destination texel covers one source texel, so what a pack fetches here is what it would
 			// have fetched from the depth itself.
-			pass.bindTexture(SAMPLER, live,
+			pass.setUniform(SAMPLER, live,
 					RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
 			pass.draw(VERTICES, 1, 0, 0);
 		}
@@ -919,14 +919,14 @@ final class PackDepth {
 
 		try (RenderPass pass = encoder.createRenderPass(() -> DISTANT_LABEL,
 				this.distantScene.view(), Optional.empty())) {
-			pass.setPipeline(compiled);
+			pass.setPipeline(PackPipelines.get(compiled));
 			RenderSystem.bindDefaultUniforms(pass);
 			pass.setVertexBuffer(0, quad.slice());
-			pass.bindTexture(BLENDED, blended,
+			pass.setUniform(BLENDED, blended,
 					RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
-			pass.bindTexture(CARRIED, carried,
+			pass.setUniform(CARRIED, carried,
 					RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
-			pass.bindTexture(PURE, pure,
+			pass.setUniform(PURE, pure,
 					RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
 			pass.draw(VERTICES, 1, 0, 0);
 		}
@@ -944,7 +944,7 @@ final class PackDepth {
 			this.distantPipeline = buildDistant();
 		}
 
-		if (device.precompilePipeline(this.distantPipeline, SOURCE).isValid()) {
+		if (PackPipelines.valid(PackPipelines.compile(device, this.distantPipeline, SOURCE))) {
 			return this.distantPipeline;
 		}
 
@@ -972,7 +972,7 @@ final class PackDepth {
 			this.pipeline = build();
 		}
 
-		if (device.precompilePipeline(this.pipeline, SOURCE).isValid()) {
+		if (PackPipelines.valid(PackPipelines.compile(device, this.pipeline, SOURCE))) {
 			return this.pipeline;
 		}
 
@@ -992,9 +992,9 @@ final class PackDepth {
 				.withFragmentShader(DISTANT_FRAGMENT_ID)
 				.withBindGroupLayout(BindGroupLayouts.GLOBALS)
 				.withBindGroupLayout(BindGroupLayout.builder()
-						.withSampler(BLENDED)
-						.withSampler(CARRIED)
-						.withSampler(PURE)
+						.withUniform(BLENDED, com.mojang.renderpearl.api.pipeline.UniformType.COMBINED_IMAGE_SAMPLER)
+						.withUniform(CARRIED, com.mojang.renderpearl.api.pipeline.UniformType.COMBINED_IMAGE_SAMPLER)
+						.withUniform(PURE, com.mojang.renderpearl.api.pipeline.UniformType.COMBINED_IMAGE_SAMPLER)
 						.build())
 				.withVertexBinding(0, DefaultVertexFormat.POSITION_TEX)
 				.withColorTargetState(new ColorTargetState(Optional.empty(), FORMAT,
@@ -1010,7 +1010,7 @@ final class PackDepth {
 				.withVertexShader(VERTEX_ID)
 				.withFragmentShader(FRAGMENT_ID)
 				.withBindGroupLayout(BindGroupLayouts.GLOBALS)
-				.withBindGroupLayout(BindGroupLayout.builder().withSampler(SAMPLER).build())
+				.withBindGroupLayout(BindGroupLayout.builder().withUniform(SAMPLER, com.mojang.renderpearl.api.pipeline.UniformType.COMBINED_IMAGE_SAMPLER).build())
 				.withVertexBinding(0, DefaultVertexFormat.POSITION_TEX)
 				.withColorTargetState(new ColorTargetState(Optional.empty(), FORMAT,
 						ColorTargetState.WRITE_ALL))

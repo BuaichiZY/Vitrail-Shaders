@@ -9,14 +9,14 @@ import dev.vitrail.pack.model.TargetFormat;
 import dev.vitrail.render.StalePipelines;
 import dev.vitrail.Vitrail;
 
-import com.mojang.blaze3d.GpuDeviceLossException;
-import com.mojang.blaze3d.systems.CommandEncoder;
-import com.mojang.blaze3d.systems.GpuDevice;
-import com.mojang.blaze3d.systems.GpuDeviceBackend;
+import com.mojang.renderpearl.api.device.GpuDeviceLossException;
+import com.mojang.renderpearl.api.commands.CommandEncoder;
+import com.mojang.renderpearl.api.device.GpuDevice;
+import com.mojang.renderpearl.backend.api.GpuDeviceBackend;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.vulkan.VulkanCommandEncoder;
-import com.mojang.blaze3d.vulkan.VulkanDevice;
-import com.mojang.blaze3d.vulkan.VulkanUtils;
+import com.mojang.renderpearl.backend.vulkan.VulkanCommandEncoder;
+import com.mojang.renderpearl.backend.vulkan.VulkanDevice;
+import com.mojang.renderpearl.backend.vulkan.VulkanUtils;
 import org.lwjgl.PointerBuffer;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.util.vma.Vma;
@@ -105,6 +105,7 @@ public final class StorageImages implements AutoCloseable {
 	 * Sodium's included, so the answer is a map read and never a walk.
 	 */
 	private Map<String, Bound> bindings = Map.of();
+	private final Map<String, Bound> accessBindings = new HashMap<>();
 	private int lastWidth;
 	private int lastHeight;
 	private boolean laidOut;
@@ -134,6 +135,23 @@ public final class StorageImages implements AutoCloseable {
 		return current.lookup(name);
 	}
 
+	public static Bound bound(String name, String layout) {
+		Bound ordinary = bound(name);
+		if (ordinary == null || !ordinary.storage() || layout == null) return ordinary;
+		String key = name + "/" + layout;
+		Bound cached = current.accessBindings.get(key);
+		if (cached != null) return cached;
+		var format = dev.vitrail.pack.texture.CustomImages.targetFormat(layout).orElseThrow();
+		for (Allocated image : current.allocated) {
+			if (image.declared.name().equals(name)) {
+				Bound access = new Bound(image.accessView(format), true, format.integer());
+				current.accessBindings.put(key, access);
+				return access;
+			}
+		}
+		return ordinary;
+	}
+
 	public static boolean storageBinding(String name) {
 		Bound bound = bound(name);
 		return bound != null && bound.storage();
@@ -152,6 +170,7 @@ public final class StorageImages implements AutoCloseable {
 	 * the same line, which is the order the walk this replaces read them in.
 	 */
 	private void rebind() {
+		this.accessBindings.clear();
 		Map<String, Bound> bound = new HashMap<>();
 		for (Allocated image : this.allocated) {
 			boolean integer = image.declared.internalFormat().used().integer();
@@ -672,6 +691,7 @@ public final class StorageImages implements AutoCloseable {
 
 		this.allocated.clear();
 		this.bindings = Map.of();
+		this.accessBindings.clear();
 		this.lastWidth = 0;
 		this.lastHeight = 0;
 		this.laidOut = false;
@@ -701,6 +721,31 @@ public final class StorageImages implements AutoCloseable {
 		private long image;
 		private long allocation;
 		private long view;
+		private final Map<Integer, Long> accessViews = new HashMap<>();
+
+		private long accessView(TargetFormat format) {
+			int requested = vkFormat(format);
+			if (requested == vkFormat(this.declared.internalFormat().used())) return this.view;
+			if (format.bytesPerPixel() != this.declared.internalFormat().used().bytesPerPixel()) {
+				throw new IllegalArgumentException("Incompatible image access format " + format + " for " + this.declared.name());
+			}
+			Long cached = this.accessViews.get(requested);
+			if (cached != null) return cached;
+			VulkanDevice vulkan = vulkan();
+			if (vulkan == null) throw new IllegalStateException("No Vulkan device for image view");
+			try (MemoryStack stack = MemoryStack.stackPush()) {
+				var info = VkImageViewCreateInfo.calloc(stack).sType$Default();
+				info.image(this.image).viewType(viewType(this.declared.shape())).format(requested);
+				info.subresourceRange().set(VK12.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1);
+				LongBuffer handle = stack.callocLong(1);
+				VulkanUtils.crashIfFailure(vulkan, VK12.vkCreateImageView(vulkan.vkDevice(), info, null, handle),
+						"storage access view " + this.declared.name() + " as " + format);
+				this.accessViews.put(requested, handle.get(0));
+				Vitrail.logger().info("Storage image {} uses {} for shader access and {} for sampling",
+						this.declared.name(), format, this.declared.internalFormat().used());
+				return handle.get(0);
+			}
+		}
 
 		/**
 		 * A second image of the same shape, for the volumes {@link #reanchor} moves, and nought for
@@ -736,6 +781,7 @@ public final class StorageImages implements AutoCloseable {
 			try (MemoryStack stack = MemoryStack.stackPush()) {
 				VkImageCreateInfo imageInfo = VkImageCreateInfo.calloc(stack).sType$Default();
 				imageInfo.imageType(type);
+				imageInfo.flags(VK12.VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT);
 				imageInfo.extent().set(extentWidth, extentHeight, extentDepth);
 				imageInfo.mipLevels(1);
 				imageInfo.arrayLayers(1);
@@ -814,6 +860,8 @@ public final class StorageImages implements AutoCloseable {
 		 */
 		private void destroy(VulkanDevice vulkan) {
 			long view = this.view;
+			List<Long> accessViews = List.copyOf(this.accessViews.values());
+			this.accessViews.clear();
 			long image = this.image;
 			long allocation = this.allocation;
 			long scratch = this.scratch;
@@ -824,6 +872,7 @@ public final class StorageImages implements AutoCloseable {
 			this.scratch = 0L;
 			this.scratchAllocation = 0L;
 			GpuRecording.destroyLater(() -> {
+				accessViews.forEach(access -> VK12.vkDestroyImageView(vulkan.vkDevice(), access, null));
 				if (view != 0L) {
 					VK12.vkDestroyImageView(vulkan.vkDevice(), view, null);
 				}

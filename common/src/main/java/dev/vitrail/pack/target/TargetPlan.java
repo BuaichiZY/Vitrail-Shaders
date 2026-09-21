@@ -88,19 +88,15 @@ public final class TargetPlan {
 	/**
 	 * A layout or a memory qualifier, which an image declaration takes any number of.
 	 * <p>
-	 * {@code readonly} is deliberately not among them, and its absence is what keeps a name this
-	 * reads out of the targets a place is said to WRITE: an image the shader may only load from is
-	 * read, not stored into. A target that only such a declaration names is then allocated by
-	 * nothing, which is what happens today and what no pack of the corpus asks for: the four
-	 * readonly images the packs carry are Bliss's voxel volumes and none of them is a
-	 * {@code colorimgN}. The day one is, it wants the road a sampler takes and not this one.
+	 * Read-only images also need storage usage and an allocation, even though they do not write.
+	 * These declarations never become framebuffer attachments or cause a ping-pong flip.
 	 * <p>
 	 * A layout takes no space after it, the way the sampler pattern beside this allows: nothing of
 	 * the corpus writes {@code layout(rgba8)uniform}, and refusing it would be a rule about
 	 * whitespace rather than about GLSL.
 	 */
 	private static final String IMAGE_QUALIFIER =
-			"(?:layout\\s*\\([^)]*\\)\\s*|(?:coherent|volatile|restrict|writeonly)\\s+)";
+			"(?:layout\\s*\\([^)]*\\)\\s*|(?:coherent|volatile|restrict|writeonly|readonly)\\s+)";
 
 	/**
 	 * The same declaration for an IMAGE, which is how a program STORES into a colour target rather
@@ -142,6 +138,7 @@ public final class TargetPlan {
 	private final TargetDirectives directives;
 	private final TargetSchedule schedule;
 	private final Set<Integer> written;
+	private final Set<Integer> storageTargets;
 	private final Set<Integer> sampled;
 	private final Set<Integer> allocated;
 	private final int shadowCeiling;
@@ -196,6 +193,7 @@ public final class TargetPlan {
 		this.passing = List.copyOf(draft.passing);
 		this.written = Collections.unmodifiableSet(new TreeSet<>(draft.written));
 		this.sampled = Collections.unmodifiableSet(new TreeSet<>(draft.sampled));
+		this.storageTargets = Set.copyOf(draft.storageTargets);
 
 		TreeSet<Integer> allocated = new TreeSet<>(draft.written);
 		allocated.addAll(draft.sampled);
@@ -461,7 +459,9 @@ public final class TargetPlan {
 				// buffers, and a compute stores into the very half it samples rather than turning
 				// the target over, which TargetSchedule.passing carries: a name read here reaching
 				// the schedule would flip a target nothing flips.
-				draft.written.addAll(colourImages(expander.expand(file.get())));
+				Set<Integer> stored = colourImages(expander.expand(file.get()));
+				draft.storageTargets.addAll(stored);
+				draft.written.addAll(stored);
 			} catch (IOException | RuntimeException e) {
 				draft.unreadable.add(key.file());
 			}
@@ -853,12 +853,21 @@ public final class TargetPlan {
 			// the light's own geometry at :746, and the one place it does not is the shadow
 			// COMPOSITES, which this walk has already skipped above.
 			//
-			// What this ALLOCATES for, nothing here yet BINDS for: the image behind colorimgN is
-			// pushed for a compute and for nothing else, so iterationT's line program stores into
-			// an image no descriptor carries. That is a gap of its own, older than this, and the
-			// allocation is right whether or not it is closed: the reference opens the target on
-			// the declaration alone.
-			draft.written.addAll(colourImages(unit));
+			Set<Integer> stored = colourImages(unit);
+			draft.storageTargets.addAll(stored);
+			draft.written.addAll(stored);
+			// Image stores may also be made by the companion vertex shader.
+			String vertexName = key.file().replaceFirst("\\.fsh$", ".vsh");
+			Optional<Path> vertex = source.file(vertexName);
+			if (vertex.isPresent() && !vertexName.equals(key.file())) {
+				try {
+					Set<Integer> vertexImages = colourImages(expander.expand(vertex.get()));
+					draft.storageTargets.addAll(vertexImages);
+					draft.written.addAll(vertexImages);
+				} catch (IOException | RuntimeException e) {
+					draft.unreadable.add(vertexName);
+				}
+			}
 
 			// A full screen program reads colortex0 under every name nothing else answers for, which
 			// is what SamplerPlan gives it and why Iris hands its default sampler the first colour
@@ -944,7 +953,12 @@ public final class TargetPlan {
 	private static Set<Integer> colourImages(ExpandedUnit unit) {
 		Set<Integer> indices = new TreeSet<>();
 		for (Declaration declaration : declared(unit, IMAGE)) {
-			TargetName.imageIndex(declaration.name()).ifPresent(indices::add);
+			String name = declaration.name();
+			Set<String> seen = new HashSet<>();
+			while (seen.add(name) && unit.defines().containsKey(name)) {
+				name = unit.defines().get(name).trim();
+			}
+			TargetName.imageIndex(name).ifPresent(indices::add);
 		}
 
 		return indices;
@@ -1038,6 +1052,11 @@ public final class TargetPlan {
 
 	public TargetSchedule schedule() {
 		return this.schedule;
+	}
+
+	/** Targets accessed as storage images by graphics or compute shaders. */
+	public Set<Integer> storageTargets() {
+		return this.storageTargets;
 	}
 
 	/** Written or sampled by some program of the place. Nothing else is allocated. */
@@ -1603,6 +1622,7 @@ public final class TargetPlan {
 		private final List<String> unreachableComputes = new ArrayList<>();
 		private final Set<String> shadowComposites = new TreeSet<>();
 		private final Set<Integer> written = new TreeSet<>();
+		private final Set<Integer> storageTargets = new TreeSet<>();
 		private final Set<Integer> sampled = new TreeSet<>();
 
 		/** Shadow colour buffers a program of the place draws into or reads. */

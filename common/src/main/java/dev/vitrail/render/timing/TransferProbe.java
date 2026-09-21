@@ -115,8 +115,8 @@ public final class TransferProbe {
 	}
 
 	private static boolean outside(String className) {
-		return !className.startsWith("com.mojang.blaze3d.vulkan.VulkanCommandEncoder")
-				&& !className.startsWith("com.mojang.blaze3d.systems.CommandEncoder")
+		return !className.startsWith("com.mojang.renderpearl.backend.vulkan.VulkanCommandEncoder")
+				&& !className.startsWith("com.mojang.renderpearl.api.commands.CommandEncoder")
 				&& !className.startsWith("dev.vitrail.render.timing.TransferProbe")
 				&& !className.startsWith("java.");
 	}

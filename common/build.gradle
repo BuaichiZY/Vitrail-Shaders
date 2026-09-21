@@ -94,3 +94,12 @@ def writeBuildIdentity = tasks.register("writeBuildIdentity") {
 
 // The task rather than its directory, so that processResources waits for it without being told.
 sourceSets.main.resources.srcDir(writeBuildIdentity)
+
+// Source-level compatibility checks do not launch Minecraft or need shader-pack archives.
+tasks.register("compatibilityRegression", JavaExec) {
+    dependsOn tasks.named("testClasses")
+    classpath = sourceSets.test.runtimeClasspath + sourceSets.main.compileClasspath
+    mainClass = "dev.vitrail.pack.source.CompatibilityRegression"
+}
+tasks.named("check") { dependsOn tasks.named("compatibilityRegression") }
+sourceSets.test.compileClasspath += sourceSets.main.compileClasspath

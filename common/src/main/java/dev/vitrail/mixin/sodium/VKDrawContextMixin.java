@@ -2,8 +2,8 @@ package dev.vitrail.mixin.sodium;
 
 import dev.vitrail.render.TerrainDraw;
 
-import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.systems.RenderPass;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.commands.RenderPass;
 import net.caffeinemc.mods.sodium.client.gpu.device.context.VKDrawContext;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;

@@ -5,9 +5,10 @@ import dev.vitrail.render.HandDraw;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.mojang.blaze3d.vertex.PoseStack;
-import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.client.renderer.state.level.PlayerRenderState;
+import net.minecraft.client.renderer.state.level.FirstPersonHandsAndItemsRenderState;
 import net.minecraft.client.renderer.GameRenderer;
-import net.minecraft.client.renderer.ItemInHandRenderer;
+import net.minecraft.client.renderer.FirstPersonHandsAndItemsRenderer;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -46,15 +47,15 @@ public abstract class GameRendererHandMixin {
 	 */
 	@WrapOperation(method = "renderItemInHand", require = 1,
 			at = @At(value = "INVOKE",
-					target = "Lnet/minecraft/client/renderer/ItemInHandRenderer;submitHandsWithItems("
+					target = "Lnet/minecraft/client/renderer/FirstPersonHandsAndItemsRenderer;submitHandsWithItems("
 							+ "FLcom/mojang/blaze3d/vertex/PoseStack;"
 							+ "Lnet/minecraft/client/renderer/SubmitNodeCollector;"
-							+ "Lnet/minecraft/client/player/LocalPlayer;I)V"))
-	private void vitrail$moveTheHand(ItemInHandRenderer renderer, float partialTick,
-			PoseStack poseStack, SubmitNodeCollector collector, LocalPlayer player, int light,
+							+ "Lnet/minecraft/client/renderer/state/level/PlayerRenderState;Lnet/minecraft/client/renderer/state/level/FirstPersonHandsAndItemsRenderState;)V"))
+	private void vitrail$moveTheHand(FirstPersonHandsAndItemsRenderer renderer, float partialTick,
+			PoseStack poseStack, SubmitNodeCollector collector, PlayerRenderState player, FirstPersonHandsAndItemsRenderState hands,
 			Operation<Void> original) {
 		if (!HandDraw.diverted()) {
-			original.call(renderer, partialTick, poseStack, collector, player, light);
+			original.call(renderer, partialTick, poseStack, collector, player, hands);
 		}
 	}
 }

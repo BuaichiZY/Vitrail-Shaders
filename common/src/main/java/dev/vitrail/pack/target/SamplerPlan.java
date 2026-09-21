@@ -148,7 +148,7 @@ public final class SamplerPlan {
 	 * over a name that already meant something else.
 	 */
 	public enum Kind {
-		COLORTEX, DEPTH, SHADOW_DEPTH, SHADOW_COLOUR, NOISE, PACK_TEXTURE, CENTER_DEPTH,
+		COLORTEX, COLOUR_IMAGE, DEPTH, SHADOW_DEPTH, SHADOW_COLOUR, NOISE, PACK_TEXTURE, CENTER_DEPTH,
 		DISTANT_DEPTH, CUSTOM_IMAGE, UNSERVED, UNBINDABLE
 	}
 
@@ -206,6 +206,11 @@ public final class SamplerPlan {
 	public static Kind classify(String name, String type, Set<String> supplied, Set<String> images) {
 		if (images.contains(name)) {
 			return Kind.CUSTOM_IMAGE;
+		}
+
+		if (TargetName.imageIndex(name).isPresent()
+				&& (type == null || Set.of("image2D", "iimage2D", "uimage2D").contains(type))) {
+			return Kind.COLOUR_IMAGE;
 		}
 
 		if (type != null && SamplerTypes.refused(type)) {
@@ -513,12 +518,13 @@ public final class SamplerPlan {
 				continue;
 			}
 
-			if (kind != Kind.COLORTEX) {
+			if (kind != Kind.COLORTEX && kind != Kind.COLOUR_IMAGE) {
 				bindings.add(new Binding(name, kind, -1, TargetSchedule.Side.MAIN, false));
 				continue;
 			}
 
-			int index = TargetName.index(name).orElse(-1);
+			int index = (kind == Kind.COLOUR_IMAGE ? TargetName.imageIndex(name)
+					: TargetName.index(name)).orElse(-1);
 
 			// A target no program of this dimension writes or samples was never allocated, so
 			// there is nothing to bind. Saying so by name is the whole difference between a gap
@@ -528,7 +534,7 @@ public final class SamplerPlan {
 				continue;
 			}
 
-			bindings.add(new Binding(name, Kind.COLORTEX, index, side(step, index), false));
+			bindings.add(new Binding(name, kind, index, side(step, index), false));
 		}
 
 		return new SamplerPlan(bindings);

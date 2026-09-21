@@ -11,15 +11,15 @@ import dev.vitrail.pack.target.TargetPlan;
 import dev.vitrail.pack.model.TargetSize;
 import dev.vitrail.Vitrail;
 
-import com.mojang.blaze3d.GpuDeviceLossException;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.systems.GpuDevice;
-import com.mojang.blaze3d.systems.RenderPass;
-import com.mojang.blaze3d.systems.RenderPassDescriptor;
+import com.mojang.renderpearl.api.device.GpuDeviceLossException;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.device.GpuDevice;
+import com.mojang.renderpearl.api.commands.RenderPass;
+import com.mojang.renderpearl.api.commands.RenderPassDescriptor;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.GpuSampler;
-import com.mojang.blaze3d.textures.GpuTextureView;
-import com.mojang.blaze3d.vertex.VertexFormat;
+import com.mojang.renderpearl.api.textures.GpuSampler;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
+import com.mojang.renderpearl.api.vertex.VertexFormat;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.RenderPipelines;
 
@@ -475,7 +475,7 @@ public final class ParticleDraw extends FamilyDraw {
 		// transparency chain is running. Beside a target the game composes itself afterwards, the
 		// pack's colour targets would be attached to a picture this engine has not got.
 		Minecraft minecraft = Minecraft.getInstance();
-		if (element.afterDeferred() && minecraft.levelRenderer.particlesTarget() != null) {
+		if (element.afterDeferred() && minecraft.options.improvedTransparency().get()) {
 			return refuse("fabulous", "the game's improved transparency is on, so it draws its "
 					+ "translucent particles into a target of its own that it composes afterwards, "
 					+ "and the pack's colour targets cannot be attached beside it. This engine turns "

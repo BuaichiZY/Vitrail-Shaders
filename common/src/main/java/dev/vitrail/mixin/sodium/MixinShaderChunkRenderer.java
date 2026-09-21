@@ -6,9 +6,9 @@ import dev.vitrail.render.LegacyTerrainFilter;
 import dev.vitrail.render.TerrainDraw;
 import dev.vitrail.render.TerrainSampler;
 
-import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.textures.GpuSampler;
-import com.mojang.blaze3d.vertex.VertexFormat;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.textures.GpuSampler;
+import com.mojang.renderpearl.api.vertex.VertexFormat;
 import net.caffeinemc.mods.sodium.client.gpu.device.backend.DrawBackend;
 import net.caffeinemc.mods.sodium.client.render.chunk.ShaderChunkRenderer;
 import net.caffeinemc.mods.sodium.client.render.chunk.terrain.TerrainRenderPass;
@@ -74,16 +74,16 @@ public abstract class MixinShaderChunkRenderer {
 	 */
 	@Inject(method = "begin", at = @At("HEAD"))
 	private void vitrail$sampler(TerrainRenderPass pass, FogParameters parameters,
-			GpuSampler terrainSampler, CallbackInfo callback) {
+			GpuSampler terrainSampler, net.minecraft.client.renderer.oit.OitStage stage, CallbackInfo callback) {
 		TerrainDraw.sampler(terrainSampler);
 	}
 
 	@Inject(method = "compileProgram", at = @At("HEAD"), cancellable = true)
-	private void vitrail$terrain(TerrainRenderPass pass,
+	private void vitrail$terrain(TerrainRenderPass pass, net.minecraft.client.renderer.oit.OitStage stage,
 			CallbackInfoReturnable<RenderPipeline> callback) {
 		// The region offset arrives through push constants, which only the Vulkan backend pushes at
 		// all: under OpenGL Sodium sets it as an ordinary uniform and our shader would read nothing.
-		if (DrawBackend.BACKEND == DrawBackend.OPENGL) {
+		if (stage != null || DrawBackend.BACKEND == DrawBackend.OPENGL) {
 			return;
 		}
 

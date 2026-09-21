@@ -3,9 +3,9 @@ package dev.vitrail.render.timing;
 import dev.vitrail.render.GeometryHold;
 import dev.vitrail.Vitrail;
 
-import com.mojang.blaze3d.systems.CommandEncoder;
-import com.mojang.blaze3d.systems.GpuDevice;
-import com.mojang.blaze3d.systems.GpuQueryPool;
+import com.mojang.renderpearl.api.commands.CommandEncoder;
+import com.mojang.renderpearl.api.device.GpuDevice;
+import com.mojang.renderpearl.api.commands.GpuQueryPool;
 import com.mojang.blaze3d.systems.RenderSystem;
 
 import java.io.IOException;

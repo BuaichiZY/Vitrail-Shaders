@@ -2,11 +2,11 @@ package dev.vitrail.render;
 
 import dev.vitrail.render.timing.PassTimings;
 
-import com.mojang.blaze3d.systems.CommandEncoder;
-import com.mojang.blaze3d.systems.RenderPass;
-import com.mojang.blaze3d.systems.RenderPassDescriptor;
-import com.mojang.blaze3d.textures.GpuTexture;
-import com.mojang.blaze3d.textures.GpuTextureView;
+import com.mojang.renderpearl.api.commands.CommandEncoder;
+import com.mojang.renderpearl.api.commands.RenderPass;
+import com.mojang.renderpearl.api.commands.RenderPassDescriptor;
+import com.mojang.renderpearl.api.textures.GpuTexture;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
 import org.joml.Vector4fc;
 
 import java.util.List;
@@ -229,7 +229,7 @@ public final class GeometryHold {
 			return DEPTH_DIFFERS;
 		}
 
-		RenderPass.RenderArea area = descriptor.renderArea;
+		RenderPass.RenderArea area = descriptor.renderArea();
 		boolean sameArea = area != null && area.x() == areaX && area.y() == areaY
 				&& area.width() == areaW && area.height() == areaH;
 
@@ -267,7 +267,7 @@ public final class GeometryHold {
 		depth = descriptor.depthAttachment() == null
 				? null
 				: descriptor.depthAttachment().textureView().texture();
-		RenderPass.RenderArea area = descriptor.renderArea;
+		RenderPass.RenderArea area = descriptor.renderArea();
 		if (area == null) {
 			areaX = 0;
 			areaY = 0;

@@ -24,13 +24,13 @@ public final class PatchedMethods {
 	public static final String SKY_PASS =
 			"addSkyPass(Lcom/mojang/blaze3d/framegraph/FrameGraphBuilder;"
 					+ "Lnet/minecraft/client/renderer/state/level/CameraRenderState;"
-					+ "Lcom/mojang/blaze3d/buffers/GpuBufferSlice;)V";
+					+ "Lcom/mojang/renderpearl/api/buffers/GpuBufferSlice;)V";
 
 	/** The same, with the model view NeoForge hands it. */
 	public static final String SKY_PASS_WIDENED =
 			"addSkyPass(Lcom/mojang/blaze3d/framegraph/FrameGraphBuilder;"
 					+ "Lnet/minecraft/client/renderer/state/level/CameraRenderState;"
-					+ "Lcom/mojang/blaze3d/buffers/GpuBufferSlice;"
+					+ "Lcom/mojang/renderpearl/api/buffers/GpuBufferSlice;"
 					+ "Lorg/joml/Matrix4fc;)V";
 
 	/** {@code WeatherEffectRenderer.render}, as the bare game declares it. */

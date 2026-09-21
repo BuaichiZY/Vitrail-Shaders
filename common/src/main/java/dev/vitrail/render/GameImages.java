@@ -2,7 +2,7 @@ package dev.vitrail.render;
 
 import dev.vitrail.mixin.access.TextureManagerAccessor;
 
-import com.mojang.blaze3d.textures.GpuTextureView;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.minecraft.client.renderer.texture.TextureManager;

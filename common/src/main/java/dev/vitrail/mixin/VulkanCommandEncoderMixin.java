@@ -4,11 +4,11 @@ import dev.vitrail.render.MipmapCommands;
 import dev.vitrail.render.timing.PassBarrier;
 import dev.vitrail.Vitrail;
 
-import com.mojang.blaze3d.textures.GpuTexture;
-import com.mojang.blaze3d.vulkan.VulkanCommandEncoder;
-import com.mojang.blaze3d.vulkan.VulkanConst;
-import com.mojang.blaze3d.vulkan.VulkanGpuTexture;
-import com.mojang.blaze3d.vulkan.VulkanRenderPass;
+import com.mojang.renderpearl.api.textures.GpuTexture;
+import com.mojang.renderpearl.backend.vulkan.VulkanCommandEncoder;
+import com.mojang.renderpearl.backend.vulkan.VulkanConst;
+import com.mojang.renderpearl.backend.vulkan.VulkanGpuTexture;
+import com.mojang.renderpearl.backend.vulkan.VulkanRenderPass;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.KHRSynchronization2;
 import org.lwjgl.vulkan.VK10;
@@ -91,7 +91,7 @@ public abstract class VulkanCommandEncoderMixin implements MipmapCommands {
 	 * attachment we wrote.
 	 */
 	@Redirect(method = "submitRenderPass", at = @At(value = "INVOKE",
-			target = "Lcom/mojang/blaze3d/vulkan/VulkanCommandEncoder;memoryBarrier("
+			target = "Lcom/mojang/renderpearl/backend/vulkan/VulkanCommandEncoder;memoryBarrier("
 					+ "Lorg/lwjgl/system/MemoryStack;)V"),
 			require = 1)
 	private void vitrail$afterPass(VulkanCommandEncoder self, MemoryStack stack) {

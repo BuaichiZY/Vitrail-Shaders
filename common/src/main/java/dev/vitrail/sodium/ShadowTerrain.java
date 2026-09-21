@@ -13,10 +13,10 @@ import dev.vitrail.render.TerrainDraw;
 import dev.vitrail.render.timing.RingTimings;
 import dev.vitrail.Vitrail;
 
-import com.mojang.blaze3d.GpuDeviceLossException;
+import com.mojang.renderpearl.api.device.GpuDeviceLossException;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.FilterMode;
-import com.mojang.blaze3d.textures.GpuSampler;
+import com.mojang.renderpearl.api.textures.FilterMode;
+import com.mojang.renderpearl.api.textures.GpuSampler;
 import net.caffeinemc.mods.sodium.client.gpu.device.backend.DrawBackend;
 import net.caffeinemc.mods.sodium.client.render.SodiumWorldRenderer;
 import net.caffeinemc.mods.sodium.client.render.chunk.ChunkRenderMatrices;
@@ -357,8 +357,12 @@ public final class ShadowTerrain {
 			// its map keeps the far terrain out with it, and getting this wrong is not a nuance: a
 			// pack that asked for neither would see LODs in its map here and none under Iris.
 			DistantDraw.shadow(false, camera);
-			TerrainDraw.shadowPass(() -> renderer.drawChunkLayer(ChunkSectionLayerGroup.OPAQUE,
-					matrices, camera.x, camera.y, camera.z, sampler));
+			TerrainDraw.shadowPass(() -> {
+				try (var pass = dev.vitrail.render.ScenePass.features()) {
+					renderer.drawChunkLayer(pass, ChunkSectionLayerGroup.OPAQUE,
+							matrices, camera.x, camera.y, camera.z, sampler, null);
+				}
+			});
 		}
 
 		// The store is taken HERE and nowhere else: with the opaque world in the map and before the
@@ -393,8 +397,12 @@ public final class ShadowTerrain {
 			// (shadows/ShadowRenderer.java:598-601). shadowtex1 is the map WITHOUT the translucents,
 			// and far water belongs on the same side of it as near water.
 			DistantDraw.shadow(true, camera);
-			TerrainDraw.shadowPass(() -> renderer.drawChunkLayer(ChunkSectionLayerGroup.TRANSLUCENT,
-					matrices, camera.x, camera.y, camera.z, sampler));
+			TerrainDraw.shadowPass(() -> {
+				try (var pass = dev.vitrail.render.ScenePass.features()) {
+					renderer.drawChunkLayer(pass, ChunkSectionLayerGroup.TRANSLUCENT,
+							matrices, camera.x, camera.y, camera.z, sampler, null);
+				}
+			});
 		}
 
 		// And the chain last of all, on a map nothing else will write this frame, which is where

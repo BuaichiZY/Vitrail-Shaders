@@ -2,9 +2,7 @@ package dev.vitrail.render;
 
 import dev.vitrail.uniform.WorldState;
 
-import com.mojang.blaze3d.systems.GpuDevice;
-import com.mojang.blaze3d.vulkan.VulkanDevice;
-import com.mojang.blaze3d.vulkan.glsl.GlslCompiler;
+import com.mojang.renderpearl.api.device.GpuDevice;
 
 /**
  * What {@link PackDump} needs of a program to be able to name it and read it back.
@@ -51,11 +49,9 @@ interface DumpedProgram {
 	 * to the program for the six on-demand families; the terrain turns it off, compiling while
 	 * the world is still held back.
 	 *
-	 * @param compiler the worker's own compiler, never the device's: the device's belongs to the
-	 *                 render thread along with the caches around it
 	 * @return true when a compiled pipeline is now waiting for {@link #compile} to adopt it
 	 */
-	default boolean warmAhead(VulkanDevice device, GlslCompiler compiler) {
+	default boolean warmAhead(GpuDevice device) {
 		return false;
 	}
 

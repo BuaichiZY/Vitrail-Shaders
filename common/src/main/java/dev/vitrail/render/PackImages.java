@@ -9,10 +9,9 @@ import dev.vitrail.pack.target.SamplerPlan;
 import dev.vitrail.pack.texture.PackTextures;
 import dev.vitrail.pack.texture.RawImage;
 import dev.vitrail.pack.texture.VolumeAtlas;
-import dev.vitrail.render.pbr.PbrAtlases;
 import dev.vitrail.uniform.NoiseTexture;
 
-import com.mojang.blaze3d.GpuFormat;
+import com.mojang.renderpearl.api.GpuFormat;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.Identifier;
@@ -258,16 +257,15 @@ final class PackImages {
 	 * the reason the rest of the class avoids it: outside a running client there is no client to
 	 * ask, and reading a pack has to keep working there.
 	 * <p>
-	 * Read once here, where Iris re-asks the texture manager at every bind, so a resource pack
-	 * swapped under a running client is not followed until the shader pack is read again. Two cases
-	 * Iris serves this cannot serve at all, and both are named rather than given something
-	 * plausible. An ATLAS, which is stitched at runtime and is no file of any resource pack. And a
-	 * normal or specular map reached from a texture NAME, which is a different door from the one
-	 * {@link PbrAtlases} opens: the maps that follow the atlases are built there, off the sprites
-	 * the game stitched, where this method is asked for a path a pack wrote in its own properties.
+	 * File resources are decoded here. Runtime atlas references instead keep an empty marker;
+	 * ColorTargets resolves those through DynamicAtlas at draw time, including their material maps.
+	 * No GPU resource is created or retained while this pack-loading worker reads the declarations.
 	 */
 	private static Image gameResource(PackTexture texture, List<String> notes) {
 		String path = texture.path();
+        if (DynamicAtlas.parse(path) != null) {
+            return new Image(texture, 0, 0, new byte[0], GpuFormat.RGBA8_UNORM, "runtime atlas " + path);
+        }
 
 		// Split rather than cut at the first colon: a name carrying more than one keeps its first
 		// two parts and drops the rest, which is what Iris makes of such a name.

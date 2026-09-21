@@ -4,24 +4,24 @@ import dev.vitrail.uniform.ClipSpace;
 import dev.vitrail.uniform.WorldState;
 import dev.vitrail.Vitrail;
 
-import com.mojang.blaze3d.GpuDeviceLossException;
-import com.mojang.blaze3d.GpuFormat;
-import com.mojang.blaze3d.PrimitiveTopology;
-import com.mojang.blaze3d.buffers.GpuBuffer;
-import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import com.mojang.renderpearl.api.device.GpuDeviceLossException;
+import com.mojang.renderpearl.api.GpuFormat;
+import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.buffers.Std140Builder;
-import com.mojang.blaze3d.pipeline.BindGroupLayout;
-import com.mojang.blaze3d.pipeline.ColorTargetState;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.shaders.ShaderSource;
-import com.mojang.blaze3d.shaders.ShaderType;
-import com.mojang.blaze3d.shaders.UniformType;
-import com.mojang.blaze3d.systems.CommandEncoder;
-import com.mojang.blaze3d.systems.GpuDevice;
-import com.mojang.blaze3d.systems.RenderPass;
+import com.mojang.renderpearl.api.pipeline.BindGroupLayout;
+import com.mojang.renderpearl.api.pipeline.ColorTargetState;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import dev.vitrail.render.api.PackShaderSource;
+import com.mojang.renderpearl.api.pipeline.ShaderType;
+import com.mojang.renderpearl.api.pipeline.UniformType;
+import com.mojang.renderpearl.api.commands.CommandEncoder;
+import com.mojang.renderpearl.api.device.GpuDevice;
+import com.mojang.renderpearl.api.commands.RenderPass;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.FilterMode;
-import com.mojang.blaze3d.textures.GpuTextureView;
+import com.mojang.renderpearl.api.textures.FilterMode;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import net.minecraft.client.renderer.BindGroupLayouts;
 import net.minecraft.resources.Identifier;
@@ -91,7 +91,7 @@ import java.util.Optional;
  * <p>
  * <strong>{@code ndc.xy = uv * 2 - 1} carries no flip here, and the reason is the viewport rather
  * than the matrix.</strong> A pass is given its viewport by the game, in
- * {@code com.mojang.blaze3d.vulkan.VulkanRenderPass}, which sets the origin at nought and takes the
+ * {@code com.mojang.renderpearl.backend.vulkan.VulkanRenderPass}, which sets the origin at nought and takes the
  * height from the attachment, so it is positive and the transform between clip and window
  * coordinates is exactly {@code uv = ndc * 0.5 + 0.5} with nothing negated. That is a fact about the
  * game and not about this engine, which is worth saying because this class has no viewport call of
@@ -181,7 +181,7 @@ final class MotionVectors {
 			}
 			""", ClipSpace.REVERSED.w, ClipSpace.REVERSED.z);
 
-	private static final ShaderSource SOURCE = (id, type) -> {
+	private static final PackShaderSource SOURCE = (id, type) -> {
 		if (type == ShaderType.FRAGMENT) {
 			return FRAGMENT_ID.equals(id) ? FRAGMENT : null;
 		}
@@ -288,13 +288,13 @@ final class MotionVectors {
 
 		try (RenderPass pass = encoder.createRenderPass(() -> LABEL, this.vectors.view(),
 				Optional.empty())) {
-			pass.setPipeline(compiled);
+			pass.setPipeline(PackPipelines.get(compiled));
 			RenderSystem.bindDefaultUniforms(pass);
 			pass.setUniform(UNIFORM_BLOCK, this.block.currentBuffer());
 			pass.setVertexBuffer(0, quad.slice());
 			// NEAREST, because a filtered depth between two surfaces is a position on neither of
 			// them and the vector drawn from it points at nothing.
-			pass.bindTexture(SCENE, depth,
+			pass.setUniform(SCENE, depth,
 					RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
 			pass.draw(VERTICES, 1, 0, 0);
 		}
@@ -398,7 +398,7 @@ final class MotionVectors {
 			this.pipeline = build();
 		}
 
-		if (device.precompilePipeline(this.pipeline, SOURCE).isValid()) {
+		if (PackPipelines.valid(PackPipelines.compile(device, this.pipeline, SOURCE))) {
 			return this.pipeline;
 		}
 
@@ -420,7 +420,7 @@ final class MotionVectors {
 				.withBindGroupLayout(BindGroupLayouts.GLOBALS)
 				.withBindGroupLayout(BindGroupLayout.builder()
 						.withUniform(UNIFORM_BLOCK, UniformType.UNIFORM_BUFFER)
-						.withSampler(SCENE)
+						.withUniform(SCENE, com.mojang.renderpearl.api.pipeline.UniformType.COMBINED_IMAGE_SAMPLER)
 						.build())
 				.withVertexBinding(0, DefaultVertexFormat.POSITION_TEX)
 				.withColorTargetState(new ColorTargetState(Optional.empty(), FORMAT,

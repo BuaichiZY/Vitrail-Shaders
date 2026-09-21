@@ -2,9 +2,9 @@ package dev.vitrail.render;
 
 import dev.vitrail.mixin.access.CommandEncoderAccessor;
 
-import com.mojang.blaze3d.systems.CommandEncoder;
-import com.mojang.blaze3d.systems.CommandEncoderBackend;
-import com.mojang.blaze3d.textures.GpuTexture;
+import com.mojang.renderpearl.api.commands.CommandEncoder;
+import com.mojang.renderpearl.backend.api.CommandEncoderBackend;
+import com.mojang.renderpearl.api.textures.GpuTexture;
 
 /**
  * Fills the mip chain of a colour target, or of the shadow map. Nothing of the pack takes part.

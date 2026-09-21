@@ -3,8 +3,8 @@ package dev.vitrail.render;
 import dev.vitrail.pack.model.BlendMode;
 import dev.vitrail.Vitrail;
 
-import com.mojang.blaze3d.pipeline.BlendFunction;
-import com.mojang.blaze3d.platform.BlendFactor;
+import com.mojang.renderpearl.api.pipeline.BlendFunction;
+import com.mojang.renderpearl.api.pipeline.BlendFactor;
 
 import java.util.LinkedHashSet;
 import java.util.Optional;

@@ -14,7 +14,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.Identifier;
 import org.jspecify.annotations.Nullable;
-import org.lwjgl.glfw.GLFW;
+import com.mojang.blaze3d.platform.InputConstants;
 
 import java.nio.file.Path;
 
@@ -47,10 +47,10 @@ public final class SettingsKey {
 			new KeyMapping.Category(Identifier.fromNamespaceAndPath(Vitrail.MOD_ID, "keybinds"));
 
 	public static final KeyMapping OPEN =
-			new KeyMapping(ScreenText.OPEN_SETTINGS, GLFW.GLFW_KEY_I, CATEGORY);
+			new KeyMapping(ScreenText.OPEN_SETTINGS, InputConstants.KEY_I, CATEGORY);
 
 	public static final KeyMapping RELOAD =
-			new KeyMapping(ScreenText.RELOAD_PACK, GLFW.GLFW_KEY_R, CATEGORY);
+			new KeyMapping(ScreenText.RELOAD_PACK, InputConstants.KEY_R, CATEGORY);
 
 	/** Iris's mapping for its pack screen, by the name it registers under on both backends. */
 	private static final String IRIS_SCREEN_KEY = "iris.keybind.shaderPackSelection";

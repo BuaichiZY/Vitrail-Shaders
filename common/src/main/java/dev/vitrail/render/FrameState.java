@@ -575,7 +575,8 @@ public final class FrameState implements WorldState {
 		this.sunAngleDegrees = camera.attributeProbe().getValue(EnvironmentAttributes.SUN_ANGLE, pt);
 		this.moonAngleDegrees = camera.attributeProbe().getValue(EnvironmentAttributes.MOON_ANGLE, pt);
 		this.moonPhase = camera.attributeProbe().getValue(EnvironmentAttributes.MOON_PHASE, pt).index();
-		this.skyColorPacked = camera.attributeProbe().getValue(EnvironmentAttributes.SKY_COLOR, pt);
+		org.joml.Vector3fc sky = camera.attributeProbe().getValue(EnvironmentAttributes.SKY_COLOR, pt);
+		this.skyColorPacked = net.minecraft.util.ARGB.colorFromFloat(1.0F, sky.x(), sky.y(), sky.z());
 		this.cloudHeight = camera.attributeProbe().getValue(EnvironmentAttributes.CLOUD_HEIGHT, pt);
 
 		// Clamped because some servers send values outside the range, and a pack that trusts them

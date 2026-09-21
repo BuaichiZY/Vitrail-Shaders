@@ -1130,6 +1130,10 @@ public final class GlslTranslator {
 			}
 		}
 
+		void inheritImageFormats(Stage other) {
+			other.translator.imageFormats.forEach(this.translator.imageFormats::putIfAbsent);
+		}
+
 		public TranslatedUnit render(List<TranslatedUnit.Uniform> block,
 				List<TranslatedUnit.Uniform> samplers, Set<String> varyings) {
 			return render(block, samplers, varyings, Set.of());
@@ -5524,15 +5528,17 @@ public final class GlslTranslator {
 				return false;
 			}
 
+			String name = target == this.samplers || target == this.blockMembers
+					? uniformAlias(token.text()) : token.text();
 			if (!memory.isEmpty()) {
-				this.memoryQualifiers.put(token.text(), memory);
+				this.memoryQualifiers.put(name, memory);
 			}
 
 			if (!format.isEmpty()) {
-				this.imageFormats.put(token.text(), format);
+				this.imageFormats.put(name, format);
 			}
 
-			StringBuilder declaration = new StringBuilder(type).append(' ').append(token.text());
+			StringBuilder declaration = new StringBuilder(type).append(' ').append(name);
 			cursor++;
 
 			while (cursor < parts.size() && this.tokens.get(parts.get(cursor)).operator("[")) {
@@ -5559,7 +5565,7 @@ public final class GlslTranslator {
 				}
 			}
 
-			record(target, token.text(), declaration.toString());
+			record(target, name, declaration.toString());
 			any = true;
 
 			if (cursor < parts.size() && this.tokens.get(parts.get(cursor)).operator(",")) {
@@ -5568,6 +5574,20 @@ public final class GlslTranslator {
 		}
 
 		return any;
+	}
+
+	/** Lifted declarations precede pack macros, so use the identifier the compiler will see. */
+	private String uniformAlias(String name) {
+		Set<String> visited = new HashSet<>();
+		String resolved = name;
+		while (visited.add(resolved)) {
+			String next = this.macroAliases.get(resolved);
+			if (next == null || next.isEmpty()) {
+				return resolved;
+			}
+			resolved = next;
+		}
+		return name;
 	}
 
 	private void record(Map<String, String> target, String name, String declaration) {

@@ -2,11 +2,11 @@ package dev.vitrail.render;
 
 import dev.vitrail.render.pbr.PbrMap;
 
-import com.mojang.blaze3d.GpuFormat;
+import com.mojang.renderpearl.api.GpuFormat;
 import com.mojang.blaze3d.pipeline.TextureTarget;
-import com.mojang.blaze3d.systems.CommandEncoder;
-import com.mojang.blaze3d.systems.GpuDevice;
-import com.mojang.blaze3d.textures.GpuTextureView;
+import com.mojang.renderpearl.api.commands.CommandEncoder;
+import com.mojang.renderpearl.api.device.GpuDevice;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
 
 import org.joml.Vector4f;
 
@@ -53,12 +53,12 @@ final class ConstantTextures {
 	 * holds no pass open, see {@link #ready}.
 	 */
 	private ConstantTextures(GpuDevice device) {
-		this.black = new TextureTarget("Vitrail terrain black", 1, 1, false, FORMAT);
-		this.white = new TextureTarget("Vitrail terrain white", 1, 1, false, FORMAT);
-		this.farPlane = new TextureTarget("Vitrail far plane", 1, 1, true, FORMAT);
+		this.black = new TextureTarget("Vitrail terrain black", 1, 1, FORMAT, null);
+		this.white = new TextureTarget("Vitrail terrain white", 1, 1, FORMAT, null);
+		this.farPlane = new TextureTarget("Vitrail far plane", 1, 1, FORMAT, GpuFormat.D32_FLOAT);
 		for (PbrMap map : PbrMap.values()) {
 			this.flatMaps.put(map, new TextureTarget("Vitrail terrain " + map.sampler(), 1, 1,
-					false, FORMAT));
+					FORMAT, null));
 		}
 
 		CommandEncoder encoder = device.createCommandEncoder();

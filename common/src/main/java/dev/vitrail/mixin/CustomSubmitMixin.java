@@ -32,8 +32,7 @@ public abstract class CustomSubmitMixin implements BlockEntityOrigin, SubmittedI
 	private long vitrail$identifiers;
 
 	@Inject(method = "<init>", at = @At("RETURN"), require = 1)
-	private void vitrail$capture(PoseStack.Pose pose, RenderType renderType,
-			SubmitNodeCollector.CustomGeometryRenderer renderer, CallbackInfo callback) {
+	private void vitrail$capture(CallbackInfo callback) {
 		this.vitrail$blockEntity = BlockEntityGeometry.submitting();
 		this.vitrail$identifiers = EntityIdentifiers.packed();
 	}

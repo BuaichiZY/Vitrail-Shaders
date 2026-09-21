@@ -11,14 +11,14 @@ import dev.vitrail.pack.target.TargetPlan;
 import dev.vitrail.pack.model.TargetSize;
 import dev.vitrail.Vitrail;
 
-import com.mojang.blaze3d.GpuDeviceLossException;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.systems.GpuDevice;
-import com.mojang.blaze3d.systems.RenderPass;
-import com.mojang.blaze3d.systems.RenderPassDescriptor;
+import com.mojang.renderpearl.api.device.GpuDeviceLossException;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.device.GpuDevice;
+import com.mojang.renderpearl.api.commands.RenderPass;
+import com.mojang.renderpearl.api.commands.RenderPassDescriptor;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.GpuSampler;
-import com.mojang.blaze3d.textures.GpuTextureView;
+import com.mojang.renderpearl.api.textures.GpuSampler;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.RenderPipelines;
 
@@ -115,8 +115,7 @@ public final class WeatherDraw extends FamilyDraw {
 	private static final Map<RenderPipeline, Element> ELEMENTS = new LinkedHashMap<>();
 
 	static {
-		put(new Element(RenderPipelines.WEATHER_NO_DEPTH_WRITE, "weather", RenderStage.RAIN_SNOW));
-		put(new Element(RenderPipelines.WEATHER_DEPTH_WRITE, "weather_depth", RenderStage.RAIN_SNOW));
+		put(new Element(RenderPipelines.WEATHER, "weather", RenderStage.RAIN_SNOW));
 	}
 
 	private static void put(Element element) {
@@ -360,7 +359,7 @@ public final class WeatherDraw extends FamilyDraw {
 		// target the game is going to compose itself afterwards they would be attached to a picture
 		// this engine has not got and does not read.
 		Minecraft minecraft = Minecraft.getInstance();
-		if (minecraft.levelRenderer.weatherTarget() != null) {
+		if (minecraft.options.improvedTransparency().get()) {
 			this.drawing = null;
 
 			return refuse("fabulous", "the game's improved transparency is on, so it draws its "

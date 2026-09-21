@@ -3,8 +3,9 @@ package dev.vitrail.mixin;
 import dev.vitrail.render.HandDraw;
 
 import com.mojang.blaze3d.vertex.PoseStack;
-import net.minecraft.client.player.AbstractClientPlayer;
-import net.minecraft.client.renderer.ItemInHandRenderer;
+import net.minecraft.client.renderer.state.level.PlayerRenderState;
+import net.minecraft.client.renderer.state.level.FirstPersonHandsAndItemsRenderState;
+import net.minecraft.client.renderer.FirstPersonHandsAndItemsRenderer;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
@@ -30,7 +31,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * covers the game's own late call on every frame where the switch is off or no pack is loaded. There
  * is no need to test that separately: nothing raises a half except the two passes themselves.
  */
-@Mixin(ItemInHandRenderer.class)
+@Mixin(FirstPersonHandsAndItemsRenderer.class)
 public abstract class ItemInHandRendererMixin {
 
 	/**
@@ -41,7 +42,7 @@ public abstract class ItemInHandRendererMixin {
 	 * one, which is the failure this engine refuses.
 	 */
 	@Inject(method = "submitArmWithItem", at = @At("HEAD"), cancellable = true, require = 1)
-	private void vitrail$oneHalfAtATime(AbstractClientPlayer player, float frameInterp, float xRot,
+	private void vitrail$oneHalfAtATime(PlayerRenderState player, FirstPersonHandsAndItemsRenderState state, float frameInterp, float xRot,
 			InteractionHand hand, float attack, ItemStack itemStack, float inverseArmHeight,
 			PoseStack poseStack, SubmitNodeCollector submitNodeCollector, int lightCoords,
 			CallbackInfo callback) {

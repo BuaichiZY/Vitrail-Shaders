@@ -23,13 +23,13 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class ItemFeatureRendererMixin {
 
 	@Inject(method = "prepareSubmit", at = @At("HEAD"), require = 1)
-	private void vitrail$begin(ItemFeatureRenderer.Submit submit, boolean foil,
+	private void vitrail$begin(ItemFeatureRenderer.Submit submit,
 			CallbackInfo callback) {
 		EntityIdentifiers.restore(((SubmittedIdentifiers) (Object) submit).vitrail$identifiers());
 	}
 
 	@Inject(method = "prepareSubmit", at = @At("RETURN"), require = 1)
-	private void vitrail$end(ItemFeatureRenderer.Submit submit, boolean foil,
+	private void vitrail$end(ItemFeatureRenderer.Submit submit,
 			CallbackInfo callback) {
 		EntityIdentifiers.clear();
 	}

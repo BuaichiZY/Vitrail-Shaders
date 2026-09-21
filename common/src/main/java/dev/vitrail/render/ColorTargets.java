@@ -18,16 +18,16 @@ import dev.vitrail.uniform.ClipSpace;
 import dev.vitrail.uniform.NoiseTexture;
 import dev.vitrail.Vitrail;
 
-import com.mojang.blaze3d.GpuDeviceLossException;
-import com.mojang.blaze3d.GpuFormat;
-import com.mojang.blaze3d.systems.CommandEncoder;
-import com.mojang.blaze3d.systems.GpuDevice;
-import com.mojang.blaze3d.systems.RenderPass;
-import com.mojang.blaze3d.systems.RenderPassDescriptor;
+import com.mojang.renderpearl.api.device.GpuDeviceLossException;
+import com.mojang.renderpearl.api.GpuFormat;
+import com.mojang.renderpearl.api.commands.CommandEncoder;
+import com.mojang.renderpearl.api.device.GpuDevice;
+import com.mojang.renderpearl.api.commands.RenderPass;
+import com.mojang.renderpearl.api.commands.RenderPassDescriptor;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.FilterMode;
-import com.mojang.blaze3d.textures.GpuTexture;
-import com.mojang.blaze3d.textures.GpuTextureView;
+import com.mojang.renderpearl.api.textures.FilterMode;
+import com.mojang.renderpearl.api.textures.GpuTexture;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
 import org.joml.Vector4f;
 import org.joml.Vector4fc;
 
@@ -713,14 +713,14 @@ final class ColorTargets {
 			int height = group.get(0).view().texture().getHeight(0);
 			for (int from = 0; from < group.size(); from += perPass) {
 				int to = Math.min(from + perPass, group.size());
-				RenderPassDescriptor descriptor = RenderPassDescriptor.create(() -> CLEAR_LABEL);
+				RenderPassDescriptor.Builder descriptor = RenderPassDescriptor.builder(() -> CLEAR_LABEL);
 				for (int index = from; index < to; index++) {
 					Pending one = group.get(index);
 					descriptor.withColorAttachment(one.view(), Optional.of(one.colour()));
 				}
 
 				descriptor.withRenderArea(new RenderPass.RenderArea(0, 0, width, height));
-				encoder.createRenderPass(descriptor).close();
+				encoder.createRenderPass(descriptor.build()).close();
 			}
 		}
 	}
@@ -757,12 +757,16 @@ final class ColorTargets {
 				: Math.max(1, device.getDeviceInfo().limits().maxColorAttachments());
 	}
 
-	/**
-	 * Names the targets a compute of the pack writes as an image, before any of them is allocated.
-	 * Whether the device makes a storage image of a target's format is asked at its allocation, on
-	 * the render thread where a device exists, and a refusal is said there: the target is
-	 * allocated as it was and the compute naming it is refused at its first dispatch.
-	 */
+	/** Storage bindings require a writable allocation and a view of exactly one mip level. */
+	GpuTextureView storageView(int index, dev.vitrail.pack.target.TargetSchedule.Side side) {
+		TargetSurface surface = surface(index, side);
+		if (surface == null || !surface.storage()) {
+			throw new IllegalStateException("colorimg" + index + " has no writable colour target");
+		}
+		return surface.storageView();
+	}
+
+	/** Records image usage before allocation; graphics and compute share the same targets. */
 	void storageTargets(Set<Integer> targets) {
 		this.storageTargets = Set.copyOf(targets);
 	}
@@ -1136,6 +1140,10 @@ final class ColorTargets {
 
 		for (PackImages.Image image : images) {
 			Vitrail.logger().info("The pack supplies {}", PackImages.describe(image));
+            if (image.texture().gameResource() && DynamicAtlas.parse(image.texture().path()) != null) {
+                ConstantTextures.of(RenderSystem.getDevice());
+                continue;
+            }
 
 			// On the render thread, and before the pack-load worker exists: this is what answers the
 			// device for every format the pack supplies, so a geometry program built off thread
@@ -1246,6 +1254,8 @@ final class ColorTargets {
 
 	/** The view behind a supplied image, or null while nothing could be put behind it. */
 	GpuTextureView packView(PackImages.Image image) {
+        DynamicAtlas dynamic = image.texture().gameResource() ? DynamicAtlas.parse(image.texture().path()) : null;
+        if (dynamic != null) return dynamic.view();
 		TargetSurface surface = this.packSurfaces.get(image);
 
 		return surface == null ? null : surface.view();
@@ -1295,8 +1305,8 @@ final class ColorTargets {
 			TargetDirectives directives = this.plan.directives();
 			boolean storage = this.storageTargets.contains(index) && GpuFormats.storageCapable(format);
 			if (this.storageTargets.contains(index) && !storage && this.storageRefused.add(index)) {
-				Vitrail.logger().warn("{} is written by a compute as an image, and this device makes "
-						+ "no storage image of {}, so that compute is not dispatched", name, format);
+				Vitrail.logger().warn("{} requires storage image access, but this device does not "
+						+ "support that usage for {}; its image binding will be refused", name, format);
 			}
 			// Named before it is allocated, on purpose. RG11B10_FLOAT as a colour attachment is
 			// not something the Vulkan specification guarantees and nothing in the game asks the
@@ -1306,7 +1316,7 @@ final class ColorTargets {
 			Vitrail.logger().info("Allocating {} as {} at {}x{}, {} level(s), declared {} at {}{}", name,
 					format, width, height, TargetSurface.levelsFor(mipped, width, height),
 					directives.format(index).declared(), directives.formatSource(index),
-					storage ? ", writable from a compute" : "");
+					storage ? ", storage image access" : "");
 			side.put(index, new TargetSurface("Vitrail " + name, format, mipped, storage, width,
 					height));
 		} else {

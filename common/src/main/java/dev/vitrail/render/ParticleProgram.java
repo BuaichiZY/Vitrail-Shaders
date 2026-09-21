@@ -5,12 +5,12 @@ import dev.vitrail.pack.target.ChainPlan;
 import dev.vitrail.pack.target.TargetPlan;
 import dev.vitrail.Vitrail;
 
-import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.systems.GpuDevice;
-import com.mojang.blaze3d.textures.GpuSampler;
-import com.mojang.blaze3d.textures.GpuTextureView;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.device.GpuDevice;
+import com.mojang.renderpearl.api.textures.GpuSampler;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
-import com.mojang.blaze3d.vertex.VertexFormat;
+import com.mojang.renderpearl.api.vertex.VertexFormat;
 
 import java.util.List;
 import java.util.Set;
@@ -87,7 +87,7 @@ final class ParticleProgram extends FamilyProgram {
 
 		return new ParticleProgram(new GeometryProgram(new GeometryProgram.Pass(FAMILY,
 				element.element(), NAMESPACE, ANSWERED, false,
-				game.getColorTargetState().blendFunction(),
+				game.getColorTargetStates().getFirst().blendFunction(),
 				// The coverage mask on the opaque half and not on the translucent one, which is the
 				// entities' rule and is what decides whether the pack owns draw buffer nought.
 				//

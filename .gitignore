@@ -72,3 +72,9 @@ replay_pid*.log
 
 # glslangValidator drops its SPIR-V next to wherever it was run from.
 *.spv
+
+# Local port diagnostics and extracted game sources, never distributed.
+/work/
+/port-*.log
+/sodium-versions.xml
+logs/

@@ -4,14 +4,14 @@ import dev.vitrail.glsl.EntityVertex;
 import dev.vitrail.mixin.access.GpuDeviceAccessor;
 import dev.vitrail.Vitrail;
 
-import com.mojang.blaze3d.GpuDeviceLossException;
-import com.mojang.blaze3d.GpuFormat;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.systems.GpuDevice;
+import com.mojang.renderpearl.api.device.GpuDeviceLossException;
+import com.mojang.renderpearl.api.GpuFormat;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.device.GpuDevice;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
-import com.mojang.blaze3d.vertex.VertexFormat;
-import com.mojang.blaze3d.vertex.VertexFormatElement;
+import com.mojang.renderpearl.api.vertex.VertexFormat;
+import com.mojang.renderpearl.api.vertex.VertexFormatElement;
 import net.minecraft.client.Minecraft;
 
 import java.util.List;
@@ -278,11 +278,11 @@ public final class EntityMesh {
 		// plausible-and-wrong.
 		if (moved) {
 			GpuDevice device = RenderSystem.getDevice();
-			if (((GpuDeviceAccessor) device).vitrail$backend() instanceof StalePipelines stale) {
-				List<RenderPipeline> dropped = stale.vitrail$dropEntityPipelines();
+			if (((GpuDeviceAccessor) device).vitrail$backend() instanceof com.mojang.renderpearl.backend.vulkan.VulkanDevice) {
+				List<RenderPipeline> dropped = PackPipelines.dropGameEntityPipelines();
 				try {
 					for (RenderPipeline pipeline : dropped) {
-						device.precompilePipeline(pipeline, null);
+						PackPipelines.compile(device, pipeline, null);
 					}
 				} catch (GpuDeviceLossException e) {
 					throw e;
@@ -304,7 +304,7 @@ public final class EntityMesh {
 					// asking, so the entity switch is the one question left and it finds agreement.
 					widerRefused = true;
 					carrying = false;
-					stale.vitrail$dropEntityPipelines();
+					PackPipelines.dropGameEntityPipelines();
 					HandDraw.stopped();
 					EntityDraw.wanted(false);
 					Vitrail.logger().error("An entity pipeline of the game did not compile at the "

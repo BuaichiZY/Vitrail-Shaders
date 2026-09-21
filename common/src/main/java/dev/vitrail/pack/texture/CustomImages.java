@@ -40,6 +40,10 @@ public final class CustomImages {
 		return LAYOUT_FORMATS.contains(word);
 	}
 
+	public static Optional<TargetFormat> targetFormat(String layout) {
+		return Arrays.stream(TargetFormat.values()).filter(format -> glslLayout(format).equals(layout)).findFirst();
+	}
+
 	/** Records the live {@code image.NAME} lines of the pack about to be translated. */
 	public static void install(ImageInformation.Reading reading) {
 		Map<String, ImageInformation> images = new LinkedHashMap<>();

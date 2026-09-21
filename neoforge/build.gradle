@@ -25,11 +25,17 @@ neoForge {
 	}
 }
 
+repositories {
+	maven { url = "https://maven.caffeinemc.net/releases" }
+}
+
 dependencies {
 	// Sodium is not named here and does not have to be: everything that reaches into it lives in
 	// the common module, which declares it, and nothing this module calls has a Sodium type in its
 	// signature.
 	compileOnly project(":common")
+	// Required by the development client as well as installed instances.
+	runtimeOnly "net.caffeinemc:sodium-neoforge:${project.sodium_version}"
 }
 
 tasks.named("processResources", ProcessResources).configure {

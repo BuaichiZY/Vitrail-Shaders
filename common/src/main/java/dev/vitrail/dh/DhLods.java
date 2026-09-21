@@ -5,8 +5,8 @@ import dev.vitrail.render.DistantMesh;
 import dev.vitrail.render.timing.PassTimings;
 import dev.vitrail.Vitrail;
 
-import com.mojang.blaze3d.GpuDeviceLossException;
-import com.mojang.blaze3d.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.device.GpuDeviceLossException;
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
 
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;

@@ -1,7 +1,7 @@
 package dev.vitrail.mixin.access;
 
-import com.mojang.blaze3d.systems.GpuDevice;
-import com.mojang.blaze3d.systems.GpuDeviceBackend;
+import com.mojang.renderpearl.api.device.GpuDevice;
+import com.mojang.renderpearl.backend.api.GpuDeviceBackend;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
 
@@ -13,7 +13,7 @@ import org.spongepowered.asm.mixin.gen.Accessor;
  * one {@code VulkanDeviceMixin} taught to set entity pipelines aside, and an instanceof against a
  * private field is an accessor's whole job.
  */
-@Mixin(GpuDevice.class)
+@Mixin(com.mojang.renderpearl.frontend.FrontendGpuDevice.class)
 public interface GpuDeviceAccessor {
 
 	@Accessor("backend")

@@ -15,9 +15,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * <p>
  * One method and no state of its own: everything that needs to know the format asks here, the chunk
  * builder for the stride it writes at, the region for the size of its geometry arena, and the
- * renderer for the layout it binds. Iris does the same thing with two {@code ModifyArg}s on the two
- * calls, which only works while there are two. Sodium 0.9.2 added a fourth site that does not ask
- * here at all, {@link ArenaAggregatorMixin}, and that is a separate hole.
+ * renderer for the layout it binds. Sodium 0.9.2 for 26.3 also queries this method when constructing
+ * its shared geometry arena, so the allocator uses the same stride without a separate patch.
  * <p>
  * <strong>The answer may change while the game runs, and this is not where it changes.</strong> Two
  * of the three readers are the section manager's constructor and the third is a region's device

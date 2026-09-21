@@ -2,8 +2,8 @@ package dev.vitrail.mixin;
 
 import dev.vitrail.render.EntityMesh;
 
-import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.vertex.VertexFormat;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.vertex.VertexFormat;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -45,20 +45,20 @@ public abstract class RenderPipelineMixin {
 	 * the entity ones, so a hundred pipelines hold one field and allocate nothing.
 	 */
 	@Unique
-	private VertexFormat @Nullable [] vitrail$carried;
+	private java.util.@Nullable List<VertexFormat> vitrail$carried;
 
 	@Inject(method = "getVertexFormatBindings", at = @At("RETURN"), cancellable = true, require = 1)
-	private void vitrail$bindings(CallbackInfoReturnable<VertexFormat[]> callback) {
+	private void vitrail$bindings(CallbackInfoReturnable<java.util.List<VertexFormat>> callback) {
 		if (!EntityMesh.carrying()) {
 			return;
 		}
 
-		VertexFormat[] declared = callback.getReturnValue();
+		java.util.List<VertexFormat> declared = callback.getReturnValue();
 		if (declared == null) {
 			return;
 		}
 
-		VertexFormat[] carried = this.vitrail$carried;
+		java.util.List<VertexFormat> carried = this.vitrail$carried;
 		if (carried == null) {
 			carried = exchange(declared);
 			this.vitrail$carried = carried;
@@ -73,13 +73,13 @@ public abstract class RenderPipelineMixin {
 	}
 
 	@Unique
-	private static VertexFormat[] exchange(VertexFormat[] declared) {
-		VertexFormat[] carried = declared.clone();
+	private static java.util.List<VertexFormat> exchange(java.util.List<VertexFormat> declared) {
+		java.util.List<VertexFormat> carried = new java.util.ArrayList<>(declared);
 		boolean moved = false;
-		for (int binding = 0; binding < carried.length; binding++) {
-			VertexFormat one = EntityMesh.binding(carried[binding]);
-			moved = moved || one != carried[binding];
-			carried[binding] = one;
+		for (int binding = 0; binding < carried.size(); binding++) {
+			VertexFormat one = EntityMesh.binding(carried.get(binding));
+			moved = moved || one != carried.get(binding);
+			carried.set(binding, one);
 		}
 
 		return moved ? carried : declared;

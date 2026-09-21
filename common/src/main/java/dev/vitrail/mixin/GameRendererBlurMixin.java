@@ -34,7 +34,7 @@ public abstract class GameRendererBlurMixin {
 	@ModifyArg(method = "render",
 			at = @At(value = "INVOKE",
 					target = "Lnet/minecraft/client/renderer/GlobalSettingsUniform;"
-							+ "update(IIDJLnet/minecraft/client/DeltaTracker;I"
+							+ "update(IIDJFI"
 							+ "Lnet/minecraft/world/phys/Vec3;Z)V"),
 			index = 5, require = 1)
 	private int vitrail$fadeMenuBlur(int radius) {

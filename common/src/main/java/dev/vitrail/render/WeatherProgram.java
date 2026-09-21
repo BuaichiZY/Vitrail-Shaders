@@ -5,10 +5,10 @@ import dev.vitrail.pack.target.ChainPlan;
 import dev.vitrail.pack.target.TargetPlan;
 import dev.vitrail.Vitrail;
 
-import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.systems.GpuDevice;
-import com.mojang.blaze3d.textures.GpuSampler;
-import com.mojang.blaze3d.textures.GpuTextureView;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.device.GpuDevice;
+import com.mojang.renderpearl.api.textures.GpuSampler;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 
 import java.util.List;
@@ -90,14 +90,15 @@ final class WeatherProgram extends FamilyProgram {
 
 		return new WeatherProgram(new GeometryProgram(new GeometryProgram.Pass(FAMILY,
 				element.element(), NAMESPACE, ANSWERED, false,
-				game.getColorTargetState().blendFunction(),
+				game.getColorTargetStates().getFirst().blendFunction(),
 				// No coverage mask, and the sky's rule is the one that decides it: the mask is written
 				// whatever the blend, so a curtain of rain that is a hundred parts transparent to one
 				// part water would claim every pixel it spans. It is also drawn long after the seed,
 				// which is what the mask exists to cut. Nothing claims these pixels for it either, and
 				// nothing needs to: a pass drawn after the seed answers that question by itself.
 				false, false, true, game.getPrimitiveTopology(), game.isCull(),
-				game.getDepthStencilState(), element.stage(),
+				values.rainDepth() ? com.mojang.renderpearl.api.pipeline.DepthStencilState.DEFAULT
+						: game.getDepthStencilState(), element.stage(),
 				// Nothing of the game's bound beside the mesh, unlike the clouds: the curtain is a
 				// vertex buffer the renderer fills, and this program declares no name of its own.
 				null,

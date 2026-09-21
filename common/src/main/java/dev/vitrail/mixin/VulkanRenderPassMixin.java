@@ -2,11 +2,12 @@ package dev.vitrail.mixin;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.vulkan.VulkanBindGroupLayout;
-import com.mojang.blaze3d.vulkan.VulkanCommandEncoder;
-import com.mojang.blaze3d.vulkan.VulkanRenderPass;
-import com.mojang.blaze3d.vulkan.VulkanRenderPipeline;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.pipeline.BindGroupLayout;
+import com.mojang.renderpearl.api.pipeline.UniformType;
+import com.mojang.renderpearl.backend.vulkan.VulkanCommandEncoder;
+import com.mojang.renderpearl.backend.vulkan.VulkanRenderPass;
+import com.mojang.renderpearl.backend.vulkan.VulkanRenderPipeline;
 import dev.vitrail.render.PushedDescriptor;
 import dev.vitrail.render.ShadowCompare;
 import dev.vitrail.render.WideSamplerSets;
@@ -61,8 +62,9 @@ public abstract class VulkanRenderPassMixin {
 			at = @At(value = "INVOKE", target = "Ljava/util/List;get(I)Ljava/lang/Object;", ordinal = 0))
 	private Object vitrail$entry(List<?> entries, int index, Operation<Object> original) {
 		Object entry = original.call(entries, index);
-		if (entry instanceof VulkanBindGroupLayout.Entry named) {
-			PushedDescriptor.begin(named);
+		if (entry instanceof BindGroupLayout.UniformDescription named) {
+			PushedDescriptor.begin(named, dev.vitrail.render.ImageAccessFormats.format(
+					dev.vitrail.render.PackPipelines.description(this.pipeline), named.name()));
 		}
 
 		return entry;
@@ -90,13 +92,13 @@ public abstract class VulkanRenderPassMixin {
 			long sampler, Operation<VkDescriptorImageInfo.Buffer> original) {
 		PushedDescriptor pushed = PushedDescriptor.current();
 		StorageImages.Bound bound = pushed.image();
-		if (bound != null && bound.storage()) {
+		if (pushed.colourImage() || (bound != null && bound.storage())) {
 			sampler = 0L;
 		} else if (ShadowCompare.noted()) {
 			// Behind the one flag: until the first pack that compares is loaded, every pass of the
 			// game's own pays a volatile read here and nothing else. Once one has been, the flag
 			// stays up for the session and the per-name lookup is the price of having the road.
-			VulkanBindGroupLayout.Entry entry = pushed.entry();
+			BindGroupLayout.UniformDescription entry = pushed.entry();
 			if (entry != null && this.pipeline != null && vitrail$compared().contains(entry.name())) {
 				sampler = ShadowCompare.sampler(this.pipeline.device());
 			}
@@ -141,7 +143,7 @@ public abstract class VulkanRenderPassMixin {
 			Operation<VkWriteDescriptorSet> original) {
 		PushedDescriptor pushed = PushedDescriptor.current();
 		StorageImages.Bound image = pushed.image();
-		if (type == 1 && image != null && image.storage()) {
+		if (type == 1 && (pushed.colourImage() || (image != null && image.storage()))) {
 			type = 3;
 		}
 
@@ -164,7 +166,7 @@ public abstract class VulkanRenderPassMixin {
 							+ "Lorg/lwjgl/vulkan/VkWriteDescriptorSet$Buffer;)V"))
 	private void vitrail$pushOrBind(VkCommandBuffer commands, int bindPoint, long layout, int set,
 			VkWriteDescriptorSet.Buffer writes, Operation<Void> original) {
-		long setLayout = this.pipeline == null ? 0L : this.pipeline.layout().handle();
+		long setLayout = this.pipeline == null ? 0L : ((dev.vitrail.mixin.access.VulkanRenderPipelineAccessor) (Object) this.pipeline).vitrail$descriptorSetLayout();
 		if (WideSamplerSets.allocated(setLayout)) {
 			WideSamplerSets.bind(this.encoder, commands, bindPoint, layout, set, setLayout, writes);
 			return;
@@ -175,10 +177,10 @@ public abstract class VulkanRenderPassMixin {
 
 	@Unique
 	private Set<String> vitrail$compared() {
-		RenderPipeline info = this.pipeline.info();
+		RenderPipeline info = dev.vitrail.render.PackPipelines.description(this.pipeline);
 		if (info != this.vitrail$comparedFor) {
 			this.vitrail$comparedFor = info;
-			this.vitrail$compared = ShadowCompare.compared(info);
+			this.vitrail$compared = info == null ? Set.of() : ShadowCompare.compared(info);
 		}
 
 		return this.vitrail$compared;

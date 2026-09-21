@@ -2,13 +2,11 @@ package dev.vitrail.render;
 
 import dev.vitrail.uniform.WorldState;
 
-import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.systems.GpuDevice;
-import com.mojang.blaze3d.systems.RenderPass;
-import com.mojang.blaze3d.systems.RenderPassDescriptor;
-import com.mojang.blaze3d.textures.GpuTextureView;
-import com.mojang.blaze3d.vulkan.VulkanDevice;
-import com.mojang.blaze3d.vulkan.glsl.GlslCompiler;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.device.GpuDevice;
+import com.mojang.renderpearl.api.commands.RenderPass;
+import com.mojang.renderpearl.api.commands.RenderPassDescriptor;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
 
 /**
  * What every family's program is over the {@link GeometryProgram} it holds: the part of the
@@ -68,8 +66,8 @@ abstract class FamilyProgram implements DumpedProgram {
 
 	/** @see GeometryProgram#warmAhead */
 	@Override
-	public boolean warmAhead(VulkanDevice device, GlslCompiler compiler) {
-		return this.body.warmAhead(device, compiler);
+	public boolean warmAhead(GpuDevice device) {
+		return this.body.warmAhead(device);
 	}
 
 	/** @see GeometryProgram#discardAhead */

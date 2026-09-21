@@ -3,7 +3,6 @@ package dev.vitrail.render;
 import dev.vitrail.glsl.LegacyGlsl;
 import dev.vitrail.glsl.PackProgram;
 import dev.vitrail.glsl.TranslatedUnit;
-import dev.vitrail.mixin.access.GpuDeviceAccessor;
 import dev.vitrail.pack.model.AlphaTest;
 import dev.vitrail.pack.model.BlendMode;
 import dev.vitrail.pack.model.ProgramStage;
@@ -24,37 +23,31 @@ import dev.vitrail.uniform.TextSink;
 import dev.vitrail.uniform.WorldState;
 import dev.vitrail.Vitrail;
 
-import com.mojang.blaze3d.GpuDeviceLossException;
-import com.mojang.blaze3d.GpuFormat;
-import com.mojang.blaze3d.PrimitiveTopology;
-import com.mojang.blaze3d.platform.CompareOp;
-import com.mojang.blaze3d.preprocessor.GlslPreprocessor;
-import com.mojang.blaze3d.buffers.GpuBuffer;
-import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import com.mojang.renderpearl.api.device.GpuDeviceLossException;
+import com.mojang.renderpearl.api.GpuFormat;
+import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
+import com.mojang.renderpearl.api.pipeline.CompareOp;
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.buffers.Std140Builder;
-import com.mojang.blaze3d.pipeline.BindGroupLayout;
-import com.mojang.blaze3d.pipeline.BlendFunction;
-import com.mojang.blaze3d.pipeline.ColorTargetState;
-import com.mojang.blaze3d.pipeline.CompiledRenderPipeline;
-import com.mojang.blaze3d.pipeline.DepthStencilState;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.shaders.ShaderSource;
-import com.mojang.blaze3d.shaders.ShaderType;
-import com.mojang.blaze3d.shaders.UniformType;
-import com.mojang.blaze3d.systems.GpuDevice;
-import com.mojang.blaze3d.systems.RenderPass;
-import com.mojang.blaze3d.systems.RenderPassDescriptor;
+import com.mojang.renderpearl.api.pipeline.BindGroupLayout;
+import com.mojang.renderpearl.api.pipeline.BlendFunction;
+import com.mojang.renderpearl.api.pipeline.ColorTargetState;
+import com.mojang.renderpearl.api.pipeline.CompiledRenderPipeline;
+import com.mojang.renderpearl.api.pipeline.DepthStencilState;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import dev.vitrail.render.api.PackShaderSource;
+import com.mojang.renderpearl.api.pipeline.ShaderType;
+import com.mojang.renderpearl.api.pipeline.UniformType;
+import com.mojang.renderpearl.api.device.GpuDevice;
+import com.mojang.renderpearl.api.commands.RenderPass;
+import com.mojang.renderpearl.api.commands.RenderPassDescriptor;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.FilterMode;
-import com.mojang.blaze3d.textures.GpuSampler;
-import com.mojang.blaze3d.textures.GpuTextureView;
-import com.mojang.blaze3d.vertex.VertexFormat;
-import com.mojang.blaze3d.vertex.VertexFormatElement;
-import com.mojang.blaze3d.vulkan.VulkanDevice;
-import com.mojang.blaze3d.vulkan.VulkanRenderPipeline;
-import com.mojang.blaze3d.vulkan.glsl.GlslCompiler;
-import com.mojang.blaze3d.vulkan.glsl.IntermediaryShaderModule;
-import com.mojang.blaze3d.vulkan.glsl.ShaderCompileException;
+import com.mojang.renderpearl.api.textures.FilterMode;
+import com.mojang.renderpearl.api.textures.GpuSampler;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
+import com.mojang.renderpearl.api.vertex.VertexFormat;
+import com.mojang.renderpearl.api.vertex.VertexFormatElement;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.BindGroupLayouts;
 import net.minecraft.client.renderer.MappableRingBuffer;
@@ -436,7 +429,7 @@ final class GeometryProgram {
 	private final Sampled[] following;
 	private final Sampled[] settledOnce;
 	private final RenderPipeline pipeline;
-	private final ShaderSource source;
+	private final PackShaderSource source;
 
 	/**
 	 * Pipelines drawing this program over a mesh laid out by somebody else, keyed by that layout.
@@ -492,7 +485,7 @@ final class GeometryProgram {
 	 * take itself. Written and cleared under this program's monitor, on whichever side gets there
 	 * first.
 	 */
-	private VulkanRenderPipeline ahead;
+	private CompiledRenderPipeline ahead;
 
 	/**
 	 * Set by {@link #discardAhead()} when the chain released before anything drew this program:
@@ -731,7 +724,7 @@ final class GeometryProgram {
 			bindings.withUniform(pass.perDraw(), UniformType.UNIFORM_BUFFER);
 		}
 
-		this.samplers.forEach(bindings::withSampler);
+		this.samplers.forEach(name -> bindings.withUniform(name, UniformType.COMBINED_IMAGE_SAMPLER));
 		this.storage.forEach(name -> bindings.withUniform(name, UniformType.UNIFORM_BUFFER));
 
 		// Everything but the shaders, the bind group, the attachments and the two lines below is
@@ -744,6 +737,11 @@ final class GeometryProgram {
 				.withBindGroupLayout(bindings.build())
 				.withPrimitiveTopology(pass.topology())
 				.withCull(pass.cull());
+
+		// Sodium supplies a vec3 offset, an age, and a region id for every terrain draw.
+		if (pass.namespace().equals("vitrail_sodium")) {
+			builder.withPushConstantSize(20);
+		}
 
 		// A second group, and it is the game's own rather than one built here: the pass binds its
 		// contents by name, so the names have to be the ones it binds. Only the clouds have one.
@@ -810,6 +808,7 @@ final class GeometryProgram {
 		// Filed against the pipeline and not the program, because the pipeline is what the
 		// descriptor walk can see when it has to answer for a name.
 		ShadowCompare.note(this.pipeline, this.path, loaded);
+		ImageAccessFormats.note(this.pipeline, loaded);
 
 		// Same filing, same reason: the compile road has the pipeline in hand and nothing else. And
 		// the same refusal the storage block below takes, on the one road that answers no: a pack
@@ -1048,18 +1047,17 @@ final class GeometryProgram {
 		// What the worker finished is handed to the cache here, on the render thread, and the
 		// precompile below finds it as a lookup. A cache that already holds the key kept a copy
 		// somebody compiled meanwhile, so ours dies instead, never having been bound anywhere.
-		VulkanRenderPipeline ready = this.ahead;
+		CompiledRenderPipeline ready = this.ahead;
 		if (ready != null) {
 			this.ahead = null;
-			boolean adopted = ((GpuDeviceAccessor) device).vitrail$backend()
-					instanceof StalePipelines cache && cache.vitrail$adopt(this.pipeline, ready);
+			boolean adopted = PackPipelines.adopt(device, this.pipeline, ready);
 			if (!adopted) {
-				ready.destroy();
+				PackPipelines.discardUnbound(ready);
 			}
 		}
 
-		CompiledRenderPipeline compiled = device.precompilePipeline(this.pipeline, this.source);
-		if (!compiled.isValid()) {
+		CompiledRenderPipeline compiled = PackPipelines.compile(device, this.pipeline, this.source);
+		if (!PackPipelines.valid(compiled)) {
 			// Handing back an invalid pipeline throws inside setPipeline, in the middle of Sodium's
 			// own pass, which reads as a Sodium failure. Refused here instead, once.
 			this.broken = true;
@@ -1127,7 +1125,7 @@ final class GeometryProgram {
 			RuntimeException thrown = null;
 			boolean valid;
 			try {
-				valid = device.precompilePipeline(variant, this.source).isValid();
+				valid = PackPipelines.valid(PackPipelines.compile(device, variant, this.source));
 			} catch (GpuDeviceLossException e) {
 				throw e;
 			} catch (RuntimeException e) {
@@ -1206,11 +1204,12 @@ final class GeometryProgram {
 	private RenderPipeline reshapeAs(VertexFormat layout, int index) {
 		RenderPipeline.Builder builder = RenderPipeline.builder()
 				.withLocation(this.pipeline.getLocation().withSuffix("/reshaped/" + index))
-				.withVertexShader(this.pipeline.getVertexShader())
-				.withFragmentShader(this.pipeline.getFragmentShader())
+				.withVertexShader(this.pipeline.getShaders().get(ShaderType.VERTEX))
+				.withFragmentShader(this.pipeline.getShaders().get(ShaderType.FRAGMENT))
 				.withCull(this.pipeline.isCull())
 				.withPrimitiveTopology(this.pipeline.getPrimitiveTopology())
 				.withVertexBinding(0, layout);
+		builder.withPushConstantSize(this.pipeline.pushConstantSize());
 		this.pipeline.getBindGroupLayouts().forEach(builder::withBindGroupLayout);
 		if (this.pipeline.getDepthStencilState() != null) {
 			builder.withDepthStencilState(this.pipeline.getDepthStencilState());
@@ -1218,12 +1217,12 @@ final class GeometryProgram {
 
 		// Null is how the builder holds an unused slot, so null is copied as unused; the count the
 		// pipeline carries beside the array is rebuilt by walking every slot in order.
-		ColorTargetState[] states = this.pipeline.getColorTargetStates();
-		for (int slot = 0; slot < states.length; slot++) {
-			if (states[slot] == null) {
+		List<ColorTargetState> states = this.pipeline.getColorTargetStates();
+		for (int slot = 0; slot < states.size(); slot++) {
+			if (states.get(slot) == null) {
 				builder.withUnusedColorTargetState(slot);
 			} else {
-				builder.withColorTargetState(slot, states[slot]);
+				builder.withColorTargetState(slot, states.get(slot));
 			}
 		}
 
@@ -1234,6 +1233,7 @@ final class GeometryProgram {
 		// answers no for every compared name of this program and the variant's depth-reference
 		// lookups run on an ordinary sampler, undefined and silent.
 		ShadowCompare.noteBeside(built, this.pipeline);
+		ImageAccessFormats.noteBeside(built, this.pipeline);
 		GeometryStage.noteBeside(built, this.pipeline);
 
 		return built;
@@ -1251,86 +1251,26 @@ final class GeometryProgram {
 		this.compiled = false;
 	}
 
-	/**
-	 * Builds this program's compiled pipeline on the pack-load worker, through the same public
-	 * steps the device takes, so the first draw finds the half second of shaderc already paid.
-	 * <p>
-	 * <strong>Deliberately not {@code precompilePipeline}</strong>: the device keeps its results
-	 * in plain maps only the render thread may touch, and its compiler is one shared instance on
-	 * the same rule. Everything used here instead is safe off the thread. The worker's own
-	 * {@code GlslCompiler} carries shaderc, the SPIRV-Cross reflection opens a context per call,
-	 * and the three calls underneath ({@code vkCreateShaderModule}, the set layout, the pipelines)
-	 * create device-level objects Vulkan lets any thread create. What the worker may not do is
-	 * write the cache, and {@link #compile} does that half, adopting the object built here.
-	 * <p>
-	 * A compile the pack's GLSL refuses stores nothing and says so in one line, because a refusal
-	 * only this path reproduces would otherwise never be seen at all; the first draw then retries
-	 * on the device's own path, which latches {@link #broken} and prints the authoritative one.
-	 *
-	 * @param compiler the worker's own compiler, never the device's
-	 * @return true when a compiled pipeline now waits for {@link #compile} to adopt it
-	 */
-	boolean warmAhead(VulkanDevice device, GlslCompiler compiler) {
+	/** Builds an unbound Vulkan pipeline on the pack worker through RenderPearl's frontend. */
+	boolean warmAhead(GpuDevice device) {
 		synchronized (this) {
 			if (this.compiled || this.broken || this.discarded || this.ahead != null) {
 				return false;
 			}
 		}
-
-		VulkanRenderPipeline built;
-		try {
-			IntermediaryShaderModule vertex =
-					intermediary(compiler, this.pipeline.getVertexShader(), ShaderType.VERTEX);
-			try {
-				IntermediaryShaderModule fragment =
-						intermediary(compiler, this.pipeline.getFragmentShader(), ShaderType.FRAGMENT);
-				try {
-					GlslCompiler.CompiledModules modules =
-							compiler.compile(device, this.pipeline, vertex, fragment);
-					built = VulkanRenderPipeline.compile(device, modules.layout(), this.pipeline,
-							modules.vertex(), modules.fragment());
-				} finally {
-					// vkCreateShaderModule consumes pCode at the call, by spec, so the buffers
-					// behind the intermediaries are done once compile returns. The device keeps
-					// its own in a cache instead, which is why its path has no close: here
-					// nothing keeps them.
-					fragment.close();
-				}
-			} finally {
-				vertex.close();
-			}
-		} catch (ShaderCompileException e) {
-			// The first draw retries on the device's own path, which latches broken and prints
-			// the pack's defect properly. Said here as well because a refusal the device path
-			// does NOT reproduce would otherwise never be seen at all.
-			Vitrail.logger().info("{} stays for its first draw: {}", this.path, e.getMessage());
-
+		CompiledRenderPipeline built = device.compilePipeline(this.pipeline, this.source, Runnable::run)
+				.join().finishCompile();
+		if (built == null) {
 			return false;
 		}
-
 		synchronized (this) {
-			if (this.compiled || this.broken || this.discarded) {
-				built.destroy();
-
+			if (this.compiled || this.broken || this.discarded || this.ahead != null) {
+				PackPipelines.discardUnbound(built);
 				return false;
 			}
-
 			this.ahead = built;
 		}
-
 		return true;
-	}
-
-	/** One stage the way the device reads it: the pipeline's defines injected, then shaderc. */
-	private IntermediaryShaderModule intermediary(GlslCompiler compiler, Identifier id,
-			ShaderType type) throws ShaderCompileException {
-		String text = this.source.get(id, type);
-		if (text == null) {
-			throw new ShaderCompileException("no source for " + id);
-		}
-
-		return compiler.createIntermediary(id.toDebugFileName(),
-				GlslPreprocessor.injectDefines(text, this.pipeline.getShaderDefines()), type);
 	}
 
 	/**
@@ -1342,7 +1282,7 @@ final class GeometryProgram {
 	synchronized void discardAhead() {
 		this.discarded = true;
 		if (this.ahead != null) {
-			this.ahead.destroy();
+			PackPipelines.discardUnbound(this.ahead);
 			this.ahead = null;
 		}
 	}
@@ -1395,12 +1335,12 @@ final class GeometryProgram {
 		settled = this;
 
 		for (Sampled one : this.following) {
-			pass.bindTexture(one.name, imageView(one), imageSampler(one));
+			pass.setUniform(one.name, imageView(one), imageSampler(one));
 		}
 
 		if (settle) {
 			for (Sampled one : this.settledOnce) {
-				pass.bindTexture(one.name, one.view, one.state);
+				pass.setUniform(one.name, one.view, one.state);
 			}
 		}
 	}
@@ -1708,7 +1648,7 @@ final class GeometryProgram {
 			this.attachedViews.add(view);
 		}
 
-		RenderPassDescriptor descriptor = RenderPassDescriptor.create(this.passLabel);
+		RenderPassDescriptor.Builder descriptor = RenderPassDescriptor.builder(this.passLabel);
 		for (GpuTextureView view : this.attachedViews) {
 			if (view == null) {
 				descriptor.withUnusedColorAttachment();
@@ -1728,7 +1668,7 @@ final class GeometryProgram {
 		// is dropped before it gets here, and the game's depth is attached whatever else is.
 		descriptor.withRenderArea(area(this.targets.screenWidth(), this.targets.screenHeight()));
 
-		return depth == null ? descriptor : descriptor.withDepthAttachment(depth);
+		return (depth == null ? descriptor : descriptor.withDepthAttachment(depth)).build();
 	}
 
 	/**
@@ -1803,7 +1743,7 @@ final class GeometryProgram {
 			this.shadowViews.add(colour);
 		}
 
-		RenderPassDescriptor descriptor = RenderPassDescriptor.create(this.shadowLabel);
+		RenderPassDescriptor.Builder descriptor = RenderPassDescriptor.builder(this.shadowLabel);
 		int at = 0;
 		for (int index : this.shadowColours) {
 			descriptor.withColorAttachment(this.shadowViews.get(at), this.shadow.takeColourClear(index));
@@ -1813,7 +1753,7 @@ final class GeometryProgram {
 		descriptor.withDepthAttachment(depth, this.shadow.takeDepthClear())
 				.withRenderArea(shadowArea());
 		this.shadow.flushPending(RenderSystem.getDevice().createCommandEncoder());
-		return descriptor;
+		return descriptor.build();
 	}
 
 	/**
@@ -2062,6 +2002,7 @@ final class GeometryProgram {
 		// same way, and the two have to move together.
 		return switch (binding.kind()) {
 			case COLORTEX -> colortex(binding);
+			case COLOUR_IMAGE -> this.targets.storageView(binding.index(), binding.side());
 			case DEPTH -> depth(sampler);
 			case SHADOW_DEPTH -> shadowDepth(binding.sampler());
 			case SHADOW_COLOUR -> shadowColour(binding.index());

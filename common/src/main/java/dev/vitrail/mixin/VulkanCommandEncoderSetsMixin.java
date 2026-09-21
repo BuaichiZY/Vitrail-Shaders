@@ -3,8 +3,8 @@ package dev.vitrail.mixin;
 import dev.vitrail.render.DescriptorSetPools;
 import dev.vitrail.render.WideSamplerSets;
 
-import com.mojang.blaze3d.vulkan.VulkanCommandEncoder;
-import com.mojang.blaze3d.vulkan.VulkanDevice;
+import com.mojang.renderpearl.backend.vulkan.VulkanCommandEncoder;
+import com.mojang.renderpearl.backend.vulkan.VulkanDevice;
 import org.lwjgl.vulkan.VkWriteDescriptorSet;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -51,7 +51,7 @@ public abstract class VulkanCommandEncoderSetsMixin implements WideSamplerSets.S
 	 * to that slot.
 	 */
 	@Inject(method = "submit", require = 1,
-			at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/vulkan/VulkanCommandPool;reset()V"))
+			at = @At(value = "INVOKE", target = "Lcom/mojang/renderpearl/backend/vulkan/VulkanCommandPool;reset()V"))
 	private void vitrail$resetSets(CallbackInfo callback) {
 		if (this.vitrail$setPools != null) {
 			this.vitrail$setPools.reset(vitrail$slot());

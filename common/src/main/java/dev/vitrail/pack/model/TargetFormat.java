@@ -8,7 +8,7 @@ import java.util.Map;
  * The colour formats a target can be given, and what each name a pack may write becomes.
  * <p>
  * The constants are exactly the ones a device is trusted with, and their names are exactly the
- * names of {@code com.mojang.blaze3d.GpuFormat}. That is on purpose twice over: it makes the
+ * names of {@code com.mojang.renderpearl.api.GpuFormat}. That is on purpose twice over: it makes the
  * translation to a real format mechanical, with nothing left to decide on the far side, and it
  * makes what this class prints comparable line for line with what the engine logs in game.
  * <p>

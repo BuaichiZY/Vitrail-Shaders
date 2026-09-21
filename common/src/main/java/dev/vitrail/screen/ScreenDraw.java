@@ -23,7 +23,7 @@ import net.minecraft.sounds.SoundEvents;
  * <p>
  * <b>One line of Iris's is deliberately absent, and it is a Vulkan matter.</b> Iris enables blending
  * by hand before each blit, {@code GuiUtil.java:69} and {@code GuiUtil.java:197}, through
- * {@code com.mojang.blaze3d.opengl.GlStateManager}. That class is the OpenGL backend's own state
+ * {@code com.mojang.renderpearl.backend.opengl.GlStateManager}. That class is the OpenGL backend's own state
  * machine and there is no context for it to talk to here, so the call is not merely useless but
  * unsound. It costs the image nothing: {@code RenderPipelines.GUI_TEXTURED} already declares the
  * blend state it wants, which is why those calls are dead weight in Iris too, left over from the

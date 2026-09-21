@@ -2,7 +2,7 @@ package dev.vitrail.mixin;
 
 import dev.vitrail.render.timing.PassTimings;
 
-import com.mojang.blaze3d.vulkan.VulkanQueue;
+import com.mojang.renderpearl.backend.vulkan.VulkanQueue;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;

@@ -1,7 +1,7 @@
 package dev.vitrail.mixin;
 
-import com.mojang.blaze3d.GpuFormat;
-import com.mojang.blaze3d.vulkan.VulkanConst;
+import com.mojang.renderpearl.api.GpuFormat;
+import com.mojang.renderpearl.backend.vulkan.VulkanConst;
 import dev.vitrail.render.TextureUsage;
 import org.lwjgl.vulkan.VK10;
 import org.spongepowered.asm.mixin.Mixin;
@@ -22,7 +22,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(VulkanConst.class)
 public abstract class VulkanConstMixin {
 
-	@Inject(method = "textureUsageToVk(ILcom/mojang/blaze3d/GpuFormat;)I", at = @At("RETURN"),
+	@Inject(method = "textureUsageToVk(ILcom/mojang/renderpearl/api/GpuFormat;)I", at = @At("RETURN"),
 			cancellable = true)
 	private static void vitrail$storageUsage(int usage, GpuFormat format,
 			CallbackInfoReturnable<Integer> info) {

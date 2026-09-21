@@ -2,7 +2,7 @@ package dev.vitrail.mixin;
 
 import dev.vitrail.render.CapturedProjection;
 
-import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
 import net.minecraft.client.renderer.ProjectionMatrixBuffer;
 import org.joml.Matrix4f;
 import org.spongepowered.asm.mixin.Mixin;
@@ -27,7 +27,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(ProjectionMatrixBuffer.class)
 public class ProjectionMatrixBufferMixin {
 
-	@Inject(method = "getBuffer(Lorg/joml/Matrix4f;)Lcom/mojang/blaze3d/buffers/GpuBufferSlice;",
+	@Inject(method = "getBuffer(Lorg/joml/Matrix4f;)Lcom/mojang/renderpearl/api/buffers/GpuBufferSlice;",
 			at = @At("HEAD"))
 	private void vitrail$capture(Matrix4f projectionMatrix,
 			CallbackInfoReturnable<GpuBufferSlice> callback) {

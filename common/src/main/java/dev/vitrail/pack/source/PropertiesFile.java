@@ -3,6 +3,7 @@ package dev.vitrail.pack.source;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
@@ -22,6 +23,9 @@ import java.util.regex.Pattern;
 public final class PropertiesFile {
 
 	private static final Pattern DIRECTIVE = Pattern.compile("^\\s*#\\s*(if|ifdef|ifndef|else|elif|endif)\\b.*$");
+
+	private static final Pattern DEFINITION = Pattern.compile("^\\s*#\\s*(define|undef)\\s+([A-Za-z_]\\w*)(.*)$");
+	private static final Pattern IDENTIFIER = Pattern.compile("\\b[A-Za-z_]\\w*\\b");
 
 	private final String name;
 	private final List<String> lines;
@@ -70,6 +74,8 @@ public final class PropertiesFile {
 
 	/** The same walk over lines held elsewhere, so that {@link ShaderProperties} reads its own. */
 	static void walk(List<String> lines, Map<String, String> defines, Consumer<String> line) {
+		defines = new HashMap<>(defines);
+		Map<String, String> local = new HashMap<>();
 		ConditionStack conditions = new ConditionStack();
 		StringBuilder joined = null;
 
@@ -82,6 +88,34 @@ public final class PropertiesFile {
 
 			if (!conditions.active()) {
 				continue;
+			}
+
+			Matcher definition = DEFINITION.matcher(text);
+			if (definition.matches()) {
+				String name = definition.group(2);
+				if (definition.group(1).equals("undef")) {
+					defines.remove(name);
+					local.remove(name);
+				} else if (!definition.group(3).startsWith("(")) {
+					String value = definition.group(3).split("//", 2)[0].trim();
+					defines.put(name, value);
+					local.put(name, value);
+				}
+				continue;
+			}
+
+			// Properties may define dimensions locally in conditional branches. Expand those
+			// object macros before handing the value to parsers; never mutate caller settings.
+			int equals = text.indexOf('=');
+			if (equals >= 0 && !text.stripLeading().startsWith("#")) {
+				String value = text.substring(equals + 1);
+				for (int depth = 0; depth < 16; depth++) {
+					String expanded = IDENTIFIER.matcher(value)
+							.replaceAll(match -> Matcher.quoteReplacement(local.getOrDefault(match.group(), match.group())));
+					if (expanded.equals(value)) break;
+					value = expanded;
+				}
+				text = text.substring(0, equals + 1) + value;
 			}
 
 			boolean continues = text.endsWith("\\");

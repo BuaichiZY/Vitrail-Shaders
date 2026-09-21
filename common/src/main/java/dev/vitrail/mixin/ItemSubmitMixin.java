@@ -33,9 +33,7 @@ public abstract class ItemSubmitMixin implements SubmittedIdentifiers {
 	private long vitrail$identifiers;
 
 	@Inject(method = "<init>", at = @At("RETURN"), require = 1)
-	private void vitrail$capture(PoseStack.Pose pose, ItemDisplayContext displayContext,
-			int lightCoords, int overlayCoords, int outlineColor, int[] tintLayers,
-			List<BakedQuad> quads, ItemStackRenderState.FoilType foilType, CallbackInfo callback) {
+	private void vitrail$capture(CallbackInfo callback) {
 		this.vitrail$identifiers = EntityIdentifiers.packed();
 	}
 

@@ -75,11 +75,17 @@ public abstract class RenderTypeFeatureRendererMixin {
 					target = "Lnet/minecraft/client/renderer/rendertype/PreparedRenderType;"
 							+ "drawFromBuffer("
 							+ "Lnet/minecraft/client/renderer/StagedVertexBuffer$ExecuteInfo;"
-							+ ")V"))
+							+ "Lcom/mojang/renderpearl/api/commands/RenderPass;)V"))
 	private void vitrail$draw(PreparedRenderType renderType, StagedVertexBuffer.ExecuteInfo info,
-			Operation<Void> original) {
-		if (!EntityDraw.draw(renderType, info)) {
-			original.call(renderType, info);
+			com.mojang.renderpearl.api.commands.RenderPass pass, Operation<Void> original) {
+		dev.vitrail.render.ScenePass.enter(pass);
+		try {
+			dev.vitrail.render.ScenePass.suspend();
+			if (!EntityDraw.draw(renderType, info)) {
+				original.call(renderType, info, pass);
+			}
+		} finally {
+			dev.vitrail.render.ScenePass.leave();
 		}
 	}
 
@@ -92,7 +98,8 @@ public abstract class RenderTypeFeatureRendererMixin {
 	 * standing here would not leak but refuse.
 	 */
 	@Inject(method = "executeGroup", at = @At("RETURN"), require = 1)
-	private void vitrail$close(FeatureFrameContext context, int groupIndex, List<?> submits,
+	private void vitrail$close(FeatureFrameContext context, net.minecraft.client.renderer.oit.OitStage stage,
+			com.mojang.renderpearl.api.commands.RenderPass pass, int groupIndex, List<?> submits,
 			boolean strictlyOrdered, CallbackInfo callback) {
 		EntityDraw.endGroup();
 	}

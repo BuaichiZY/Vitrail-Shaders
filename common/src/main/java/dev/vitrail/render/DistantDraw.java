@@ -13,30 +13,30 @@ import dev.vitrail.pack.target.TargetPlan;
 import dev.vitrail.pack.model.TargetSize;
 import dev.vitrail.Vitrail;
 
-import com.mojang.blaze3d.GpuDeviceLossException;
-import com.mojang.blaze3d.GpuFormat;
-import com.mojang.blaze3d.IndexType;
-import com.mojang.blaze3d.PrimitiveTopology;
-import com.mojang.blaze3d.buffers.GpuBuffer;
-import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import com.mojang.renderpearl.api.device.GpuDeviceLossException;
+import com.mojang.renderpearl.api.GpuFormat;
+import com.mojang.renderpearl.api.pipeline.IndexType;
+import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.buffers.Std140Builder;
-import com.mojang.blaze3d.pipeline.BindGroupLayout;
-import com.mojang.blaze3d.pipeline.ColorTargetState;
-import com.mojang.blaze3d.pipeline.DepthStencilState;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.pipeline.BindGroupLayout;
+import com.mojang.renderpearl.api.pipeline.ColorTargetState;
+import com.mojang.renderpearl.api.pipeline.DepthStencilState;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
 import com.mojang.blaze3d.pipeline.RenderTarget;
-import com.mojang.blaze3d.platform.CompareOp;
-import com.mojang.blaze3d.shaders.ShaderSource;
-import com.mojang.blaze3d.shaders.ShaderType;
-import com.mojang.blaze3d.shaders.UniformType;
-import com.mojang.blaze3d.systems.CommandEncoder;
-import com.mojang.blaze3d.systems.GpuDevice;
-import com.mojang.blaze3d.systems.RenderPass;
-import com.mojang.blaze3d.systems.RenderPassDescriptor;
+import com.mojang.renderpearl.api.pipeline.CompareOp;
+import dev.vitrail.render.api.PackShaderSource;
+import com.mojang.renderpearl.api.pipeline.ShaderType;
+import com.mojang.renderpearl.api.pipeline.UniformType;
+import com.mojang.renderpearl.api.commands.CommandEncoder;
+import com.mojang.renderpearl.api.device.GpuDevice;
+import com.mojang.renderpearl.api.commands.RenderPass;
+import com.mojang.renderpearl.api.commands.RenderPassDescriptor;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.FilterMode;
-import com.mojang.blaze3d.textures.GpuTexture;
-import com.mojang.blaze3d.textures.GpuTextureView;
+import com.mojang.renderpearl.api.textures.FilterMode;
+import com.mojang.renderpearl.api.textures.GpuTexture;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.BindGroupLayouts;
@@ -272,7 +272,7 @@ public final class DistantDraw extends FamilyDraw {
 			}
 			""";
 
-	private static final ShaderSource SEED_SOURCE = (id, type) -> {
+	private static final PackShaderSource SEED_SOURCE = (id, type) -> {
 		if (type == ShaderType.FRAGMENT) {
 			return SEED_FRAGMENT_ID.equals(id) ? SEED_FRAGMENT : null;
 		}
@@ -634,15 +634,15 @@ public final class DistantDraw extends FamilyDraw {
 		try (RenderPass pass = device.createCommandEncoder().createRenderPass(
 				() -> SEED_LABEL, this.worldCarried.view(), Optional.empty(), this.blendedView,
 				java.util.OptionalDouble.empty())) {
-			pass.setPipeline(compiled);
+			pass.setPipeline(PackPipelines.get(compiled));
 			RenderSystem.bindDefaultUniforms(pass);
 			pass.setVertexBuffer(0, quad.slice());
 			pass.setUniform(SEED_BLOCK, block);
 			// NEAREST on both, and it is what makes this a rewrite of the value rather than of the
 			// image: one destination texel covers one source texel in each.
-			pass.bindTexture(SEED_WORLD, world,
+			pass.setUniform(SEED_WORLD, world,
 					RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
-			pass.bindTexture(SEED_FAR, this.depthView,
+			pass.setUniform(SEED_FAR, this.depthView,
 					RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
 			pass.draw(SEED_VERTICES, 1, 0, 0);
 		}
@@ -704,7 +704,7 @@ public final class DistantDraw extends FamilyDraw {
 		}
 
 		try (RenderPass pass = GeometryHold.open(device.createCommandEncoder(), descriptor)) {
-			pass.setPipeline(pipeline);
+			pass.setPipeline(PackPipelines.get(pipeline));
 			program.bind(pass);
 
 			for (int index = 0; index < sections.size(); index++) {
@@ -845,7 +845,8 @@ public final class DistantDraw extends FamilyDraw {
 				// the hold too, through the door CommandEncoderMixin holds open for every clear.
 				GeometryHold.flush(() -> "the far terrain's depth being emptied");
 				if (descriptor != null) {
-					descriptor.withDepthAttachment(into, clear);
+					descriptor = new RenderPassDescriptor(descriptor.label(), descriptor.colorAttachments(),
+							new RenderPassDescriptor.Attachment<>(into, clear), descriptor.renderArea());
 				}
 			} else {
 				encoder.clearDepthTexture(this.depth, 0.0);
@@ -867,7 +868,7 @@ public final class DistantDraw extends FamilyDraw {
 				? encoder.createRenderPass(() -> "Vitrail " + element.element(),
 						main.getColorTextureView(), Optional.empty(), into, clear)
 				: GeometryHold.open(encoder, descriptor)) {
-			pass.setPipeline(pipeline);
+			pass.setPipeline(PackPipelines.get(pipeline));
 			program.bind(pass);
 
 			for (int index = 0; index < sections.size(); index++) {
@@ -923,7 +924,7 @@ public final class DistantDraw extends FamilyDraw {
 			return true;
 		}
 
-		RenderPass.RenderArea area = descriptor.renderArea;
+		RenderPass.RenderArea area = descriptor.renderArea();
 
 		return area != null && area.x() == 0 && area.y() == 0
 				&& area.width() >= this.depthWidth && area.height() >= this.depthHeight;
@@ -1015,7 +1016,7 @@ public final class DistantDraw extends FamilyDraw {
 			this.seedPipeline = buildSeed();
 		}
 
-		if (device.precompilePipeline(this.seedPipeline, SEED_SOURCE).isValid()) {
+		if (PackPipelines.valid(PackPipelines.compile(device, this.seedPipeline, SEED_SOURCE))) {
 			return this.seedPipeline;
 		}
 
@@ -1040,8 +1041,8 @@ public final class DistantDraw extends FamilyDraw {
 				.withBindGroupLayout(BindGroupLayouts.GLOBALS)
 				.withBindGroupLayout(BindGroupLayout.builder()
 						.withUniform(SEED_BLOCK, UniformType.UNIFORM_BUFFER)
-						.withSampler(SEED_WORLD)
-						.withSampler(SEED_FAR)
+						.withUniform(SEED_WORLD, com.mojang.renderpearl.api.pipeline.UniformType.COMBINED_IMAGE_SAMPLER)
+						.withUniform(SEED_FAR, com.mojang.renderpearl.api.pipeline.UniformType.COMBINED_IMAGE_SAMPLER)
 						.build())
 				.withVertexBinding(0, DefaultVertexFormat.POSITION_TEX)
 				.withColorTargetState(new ColorTargetState(Optional.empty(), CARRIED_FORMAT,
@@ -1413,7 +1414,7 @@ public final class DistantDraw extends FamilyDraw {
 		 * object back until it turns, {@code MappableRingBuffer.currentBuffer} indexing an array it
 		 * only advances in {@code rotate}; and mapping one is a {@code vmaMapMemory} onto the live
 		 * allocation, the write flag being tested against the buffer's usage and nothing else
-		 * ({@code com/mojang/blaze3d/vulkan/VulkanGpuBuffer.java:118-146}). There is no orphaning
+		 * ({@code com/mojang/renderpearl/backend/vulkan/VulkanGpuBuffer.java:118-146}). There is no orphaning
 		 * and no staging copy for a second mapping to start empty from.
 		 *
 		 * @param camera where the pass this belongs to measures its geometry from, which is the

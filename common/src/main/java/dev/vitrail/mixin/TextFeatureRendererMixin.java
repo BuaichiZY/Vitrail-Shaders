@@ -42,8 +42,8 @@ public abstract class TextFeatureRendererMixin {
 
 	@Inject(method = "buildGroup", require = 1,
 			at = @At(value = "INVOKE",
-					target = "Lnet/minecraft/client/gui/Font$PreparedText;"
-							+ "visit(Lnet/minecraft/client/gui/Font$GlyphVisitor;)V"))
+					target = "Lnet/minecraft/client/renderer/feature/TextFeatureRenderer$Submit;"
+							+ "pose()Lorg/joml/Matrix4fc;"))
 	private void vitrail$begin(FeatureFrameContext context, List<TextFeatureRenderer.Submit> submits,
 			CallbackInfo callback, @Local TextFeatureRenderer.Submit submit) {
 		BlockEntityGeometry.building(((BlockEntityOrigin) (Object) submit).vitrail$fromBlockEntity());

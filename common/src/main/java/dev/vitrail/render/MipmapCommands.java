@@ -1,6 +1,6 @@
 package dev.vitrail.render;
 
-import com.mojang.blaze3d.textures.GpuTexture;
+import com.mojang.renderpearl.api.textures.GpuTexture;
 
 /**
  * The Vulkan equivalent of {@code glGenerateMipmap}: fill every level past the base by blitting

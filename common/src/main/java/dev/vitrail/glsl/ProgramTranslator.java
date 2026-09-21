@@ -319,6 +319,11 @@ public final class ProgramTranslator {
 		Set<String> elements = clashingElements(prepared, inputs);
 
 		Map<ProgramStage, TranslatedUnit> translated = new LinkedHashMap<>();
+		// Opaque declarations are shared across stages; their explicit image formats must
+		// travel with them, including declarations unused by the receiving stage.
+		for (GlslTranslator.Stage stage : prepared.values()) {
+			prepared.values().forEach(stage::inheritImageFormats);
+		}
 		prepared.forEach((stage, prepare) -> {
 			Set<String> shadowed = new LinkedHashSet<>(elements);
 			shadowed.addAll(shadowedBy(prepare, block));

@@ -13,7 +13,7 @@ import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import org.jspecify.annotations.Nullable;
-import org.lwjgl.glfw.GLFW;
+import com.mojang.blaze3d.platform.InputConstants;
 
 import java.util.Optional;
 
@@ -245,7 +245,7 @@ public abstract class OptionWidget extends PageWidget {
 	 */
 	@Override
 	public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-		if (event.button() != GLFW.GLFW_MOUSE_BUTTON_1 && event.button() != GLFW.GLFW_MOUSE_BUTTON_2) {
+		if (event.button() != InputConstants.MOUSE_BUTTON_LEFT && event.button() != InputConstants.MOUSE_BUTTON_RIGHT) {
 			return super.mouseClicked(event, doubleClick);
 		}
 
@@ -255,7 +255,7 @@ public abstract class OptionWidget extends PageWidget {
 
 		boolean moved = Minecraft.getInstance().hasShiftDown() && originalValue();
 		if (!moved) {
-			moved = event.button() == GLFW.GLFW_MOUSE_BUTTON_1 ? nextValue() : previousValue();
+			moved = event.button() == InputConstants.MOUSE_BUTTON_LEFT ? nextValue() : previousValue();
 		}
 
 		if (moved) {

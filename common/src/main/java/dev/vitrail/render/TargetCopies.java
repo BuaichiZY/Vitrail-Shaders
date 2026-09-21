@@ -4,9 +4,9 @@ import dev.vitrail.pack.model.TargetName;
 import dev.vitrail.pack.target.TargetSchedule;
 import dev.vitrail.Vitrail;
 
-import com.mojang.blaze3d.GpuDeviceLossException;
-import com.mojang.blaze3d.systems.CommandEncoder;
-import com.mojang.blaze3d.textures.GpuTextureView;
+import com.mojang.renderpearl.api.device.GpuDeviceLossException;
+import com.mojang.renderpearl.api.commands.CommandEncoder;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
 
 import java.util.HashSet;
 import java.util.LinkedHashMap;

@@ -3,24 +3,24 @@ package dev.vitrail.render;
 import dev.vitrail.uniform.Smoothed;
 import dev.vitrail.Vitrail;
 
-import com.mojang.blaze3d.GpuDeviceLossException;
-import com.mojang.blaze3d.GpuFormat;
-import com.mojang.blaze3d.PrimitiveTopology;
-import com.mojang.blaze3d.buffers.GpuBuffer;
-import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import com.mojang.renderpearl.api.device.GpuDeviceLossException;
+import com.mojang.renderpearl.api.GpuFormat;
+import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.buffers.Std140Builder;
-import com.mojang.blaze3d.pipeline.BindGroupLayout;
-import com.mojang.blaze3d.pipeline.ColorTargetState;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.shaders.ShaderSource;
-import com.mojang.blaze3d.shaders.ShaderType;
-import com.mojang.blaze3d.shaders.UniformType;
-import com.mojang.blaze3d.systems.CommandEncoder;
-import com.mojang.blaze3d.systems.GpuDevice;
-import com.mojang.blaze3d.systems.RenderPass;
+import com.mojang.renderpearl.api.pipeline.BindGroupLayout;
+import com.mojang.renderpearl.api.pipeline.ColorTargetState;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import dev.vitrail.render.api.PackShaderSource;
+import com.mojang.renderpearl.api.pipeline.ShaderType;
+import com.mojang.renderpearl.api.pipeline.UniformType;
+import com.mojang.renderpearl.api.commands.CommandEncoder;
+import com.mojang.renderpearl.api.device.GpuDevice;
+import com.mojang.renderpearl.api.commands.RenderPass;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.FilterMode;
-import com.mojang.blaze3d.textures.GpuTextureView;
+import com.mojang.renderpearl.api.textures.FilterMode;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import net.minecraft.client.renderer.BindGroupLayouts;
 import net.minecraft.client.renderer.MappableRingBuffer;
@@ -150,7 +150,7 @@ final class CenterDepth {
 			}
 			""";
 
-	private static final ShaderSource SOURCE = (id, type) -> {
+	private static final PackShaderSource SOURCE = (id, type) -> {
 		if (type == ShaderType.FRAGMENT) {
 			return FRAGMENT_ID.equals(id) ? FRAGMENT : null;
 		}
@@ -225,15 +225,15 @@ final class CenterDepth {
 		// write of the same texel.
 		try (RenderPass pass = encoder.createRenderPass(() -> LABEL, this.texels[into].view(),
 				Optional.empty())) {
-			pass.setPipeline(compiled);
+			pass.setPipeline(PackPipelines.get(compiled));
 			RenderSystem.bindDefaultUniforms(pass);
 			pass.setUniform(UNIFORM_BLOCK, this.factor.currentBuffer());
 			pass.setVertexBuffer(0, quad.slice());
 			// NEAREST on both, as Iris binds both: one is read at its own centre and the other is one
 			// texel wide, so there is nothing for a filter to average either way.
-			pass.bindTexture(SCENE, opaque,
+			pass.setUniform(SCENE, opaque,
 					RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
-			pass.bindTexture(BEFORE, this.texels[this.current].view(),
+			pass.setUniform(BEFORE, this.texels[this.current].view(),
 					RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
 			pass.draw(VERTICES, 1, 0, 0);
 		}
@@ -334,7 +334,7 @@ final class CenterDepth {
 			this.pipeline = build();
 		}
 
-		if (device.precompilePipeline(this.pipeline, SOURCE).isValid()) {
+		if (PackPipelines.valid(PackPipelines.compile(device, this.pipeline, SOURCE))) {
 			return this.pipeline;
 		}
 
@@ -359,8 +359,8 @@ final class CenterDepth {
 				.withBindGroupLayout(BindGroupLayouts.GLOBALS)
 				.withBindGroupLayout(BindGroupLayout.builder()
 						.withUniform(UNIFORM_BLOCK, UniformType.UNIFORM_BUFFER)
-						.withSampler(SCENE)
-						.withSampler(BEFORE)
+						.withUniform(SCENE, com.mojang.renderpearl.api.pipeline.UniformType.COMBINED_IMAGE_SAMPLER)
+						.withUniform(BEFORE, com.mojang.renderpearl.api.pipeline.UniformType.COMBINED_IMAGE_SAMPLER)
 						.build())
 				.withVertexBinding(0, DefaultVertexFormat.POSITION_TEX)
 				.withColorTargetState(new ColorTargetState(Optional.empty(), FORMAT,

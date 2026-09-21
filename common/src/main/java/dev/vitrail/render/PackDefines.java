@@ -5,7 +5,7 @@ import dev.vitrail.pack.option.EngineDefines;
 import dev.vitrail.render.pbr.PbrAtlases;
 import dev.vitrail.uniform.BiomeCategory;
 
-import com.mojang.blaze3d.systems.GpuDevice;
+import com.mojang.renderpearl.api.device.GpuDevice;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;

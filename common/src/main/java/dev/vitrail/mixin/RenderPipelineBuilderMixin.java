@@ -2,8 +2,8 @@ package dev.vitrail.mixin;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import com.mojang.blaze3d.pipeline.BlendFunction;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.pipeline.BlendFunction;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
 import dev.vitrail.render.BufferBlending;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -45,7 +45,7 @@ public abstract class RenderPipelineBuilderMixin {
 	 * Two functions read as one where this engine is building and the device parts its attachments,
 	 * which is the comparison the refusal hangs off and the only thing here that moves.
 	 */
-	@WrapOperation(method = "build()Lcom/mojang/blaze3d/pipeline/RenderPipeline;", require = 1,
+	@WrapOperation(method = "build()Lcom/mojang/renderpearl/api/pipeline/RenderPipeline;", require = 1,
 			at = @At(value = "INVOKE", target = "Ljava/util/Optional;equals(Ljava/lang/Object;)Z"))
 	private boolean vitrail$blendApart(Optional<BlendFunction> current, Object last,
 			Operation<Boolean> original) {

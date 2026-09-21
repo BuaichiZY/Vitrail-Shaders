@@ -352,11 +352,11 @@ public final class PackList extends AbstractSelectionList<PackList.BaseEntry> {
 		Screen here = this.minecraft.gui.screen();
 		this.minecraft.gui.setScreen(new ConfirmLinkScreen(followed -> {
 			if (followed) {
-				Util.getPlatform().openUri(address);
+				com.mojang.blaze3d.Blaze3D.openUri(java.net.URI.create(address));
 			}
 
 			this.minecraft.gui.setScreen(here);
-		}, address, true));
+		}, java.net.URI.create(address), true));
 	}
 
 	/** Every row of this list, whatever it draws. */
@@ -604,7 +604,7 @@ public final class PackList extends AbstractSelectionList<PackList.BaseEntry> {
 
 		@Override
 		public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-			return event.button() == 0 && press();
+			return event.button() == com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_LEFT && press();
 		}
 
 		@Override
