@@ -78,3 +78,8 @@ replay_pid*.log
 /port-*.log
 /sodium-versions.xml
 logs/
+
+# Local port test reports and installation notes.
+/docs/install-26.3-zh.md
+/docs/port-26.3-status.md
+/docs/shaderpack-compatibility-26.3-zh.md

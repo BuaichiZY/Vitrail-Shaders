@@ -11,7 +11,7 @@ displayURL = "https://github.com/avpbynf/Vitrail-Shaders"
 iconFile = "vitrail.png"
 authors = "avpbynf"
 displayTest = "IGNORE_ALL_VERSION"
-description = '''OptiFine-format shader packs on Minecraft's native Vulkan renderer. Unofficial Minecraft 26.3 NeoForge port; see docs/port-26.3-status.md for test coverage.'''
+description = '''OptiFine-format shader packs on Minecraft's native Vulkan renderer. Unofficial Minecraft 26.3 NeoForge port.'''
 
 # Sodium reads this block out of every mod's own metadata and turns the named mixin off.
 # features.render.world.sky hides the whole sky pass whenever the camera is in a fluid, which with a
